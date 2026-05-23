@@ -12,6 +12,9 @@ plugins {
 
     // Apply the Kotlin JVM plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+
+    // Apply Spotless for formatting enforcement (uses ktlint under the hood).
+    alias(libs.plugins.spotless)
 }
 
 repositories {
@@ -40,7 +43,7 @@ testing {
             targets {
                 all {
                     // This test suite should run after the built-in test suite has run its tests
-                    testTask.configure { shouldRunAfter(test) } 
+                    testTask.configure { shouldRunAfter(test) }
                 }
             }
         }
@@ -69,5 +72,21 @@ tasks.named<Task>("check") {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
     compilerOptions {
         allWarningsAsErrors.set(true)
+    }
+}
+
+// --- Spotless formatting guardrail ---
+// Two extensions: kotlin{} for source .kt files, kotlinGradle{} for *.gradle.kts.
+// Using both is required — the kotlin extension does NOT pick up build scripts.
+spotless {
+    kotlin {
+        target("src/**/*.kt")
+        targetExclude("**/build/**")
+        ktlint(libs.versions.ktlint.get())
+    }
+    kotlinGradle {
+        target("*.gradle.kts", "**/*.gradle.kts")
+        targetExclude("**/build/**")
+        ktlint(libs.versions.ktlint.get())
     }
 }
