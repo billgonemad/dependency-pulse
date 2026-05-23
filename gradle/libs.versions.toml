@@ -2,7 +2,17 @@
 # https://docs.gradle.org/current/userguide/version_catalogs.html#sec::toml-dependencies-format
 
 [versions]
-detekt = "1.23.8"      # latest stable; built against Kotlin 2.0.21, compatible with Kotlin 2.3 at impl time
+# Detekt 1.23.8 is the latest stable (1.23.x line). It is built against Kotlin
+# 2.0.21 and works with this project's Kotlin 2.3.20.
+#
+# WARNING (Gradle 10 migration): Detekt 1.23.8's plugin internally calls
+# ReportingExtension.file(), which is deprecated in Gradle 9.x and scheduled
+# for removal in Gradle 10. The build emits a deprecation warning today and
+# will break on Gradle 10 unless Detekt is upgraded first. Before bumping
+# Gradle, verify Detekt has a release that drops the deprecated call (a
+# 1.23.x patch or Detekt 2.x — the latter natively supports the
+# failOnSeverity API the design spec originally referenced).
+detekt = "1.23.8"
 kotlin = "2.3.20"
 ktlint = "1.8.0"       # latest stable verified at impl time
 spotless = "8.5.1"     # latest stable verified at impl time
