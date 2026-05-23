@@ -61,3 +61,13 @@ tasks.named<Task>("check") {
     // Include functionalTest as part of the check lifecycle
     dependsOn(testing.suites.named("functionalTest"))
 }
+
+// --- Kotlin compiler guardrail ---
+// Treat all Kotlin compiler warnings as errors on every KotlinCompile task
+// (main + test + functionalTest source sets). Catches deprecation usages,
+// unsafe casts, redundant null checks, etc. before they land in main.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
