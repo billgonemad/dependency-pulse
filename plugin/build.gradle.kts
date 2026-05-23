@@ -27,13 +27,13 @@ testing {
         // Configure the built-in test suite
         val test by getting(JvmTestSuite::class) {
             // Use Kotlin Test test framework
-            useKotlinTest("2.3.20")
+            useKotlinTest(libs.versions.kotlin.get())
         }
 
         // Create a new test suite
         val functionalTest by registering(JvmTestSuite::class) {
             // Use Kotlin Test test framework
-            useKotlinTest("2.3.20")
+            useKotlinTest(libs.versions.kotlin.get())
 
             dependencies {
                 // functionalTest test suite depends on the production code in tests
@@ -80,6 +80,7 @@ tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach 
 // Using both is required — the kotlin extension does NOT pick up build scripts.
 spotless {
     kotlin {
+        // Covers main, test, and functionalTest source sets — all live under src/<sourceSet>/kotlin.
         target("src/**/*.kt")
         targetExclude("**/build/**")
         ktlint(libs.versions.ktlint.get())

@@ -3,8 +3,8 @@
 
 [versions]
 kotlin = "2.3.20"
-spotless = "8.5.1"     # latest stable verified at impl time
 ktlint = "1.8.0"       # latest stable verified at impl time
+spotless = "8.5.1"     # latest stable verified at impl time
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
