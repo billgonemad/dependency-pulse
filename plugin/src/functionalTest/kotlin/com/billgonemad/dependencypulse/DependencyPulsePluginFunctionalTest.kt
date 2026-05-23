@@ -3,17 +3,16 @@
  */
 package com.billgonemad.dependencypulse
 
-import java.io.File
-import kotlin.test.assertTrue
-import kotlin.test.Test
 import org.gradle.testkit.runner.GradleRunner
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertTrue
 
 /**
  * A simple functional test for the 'com.billgonemad.dependencypulse.greeting' plugin.
  */
 class DependencyPulsePluginFunctionalTest {
-
     @field:TempDir
     lateinit var projectDir: File
 
@@ -23,11 +22,13 @@ class DependencyPulsePluginFunctionalTest {
     @Test fun `can run task`() {
         // Set up the test build
         settingsFile.writeText("")
-        buildFile.writeText("""
+        buildFile.writeText(
+            """
             plugins {
                 id('com.billgonemad.dependencypulse.greeting')
             }
-        """.trimIndent())
+            """.trimIndent(),
+        )
 
         // Run the build
         val runner = GradleRunner.create()

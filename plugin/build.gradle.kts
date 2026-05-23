@@ -10,8 +10,17 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     `java-gradle-plugin`
 
+    // Apply JaCoCo for code coverage reporting and verification.
+    `jacoco`
+
     // Apply the Kotlin JVM plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
+
+    // Apply Spotless for formatting enforcement (uses ktlint under the hood).
+    alias(libs.plugins.spotless)
+
+    // Apply Detekt for static analysis on Kotlin source.
+    alias(libs.plugins.detekt)
 }
 
 repositories {
@@ -24,13 +33,13 @@ testing {
         // Configure the built-in test suite
         val test by getting(JvmTestSuite::class) {
             // Use Kotlin Test test framework
-            useKotlinTest("2.3.20")
+            useKotlinTest(libs.versions.kotlin.get())
         }
 
         // Create a new test suite
         val functionalTest by registering(JvmTestSuite::class) {
             // Use Kotlin Test test framework
-            useKotlinTest("2.3.20")
+            useKotlinTest(libs.versions.kotlin.get())
 
             dependencies {
                 // functionalTest test suite depends on the production code in tests
@@ -40,7 +49,7 @@ testing {
             targets {
                 all {
                     // This test suite should run after the built-in test suite has run its tests
-                    testTask.configure { shouldRunAfter(test) } 
+                    testTask.configure { shouldRunAfter(test) }
                 }
             }
         }
@@ -58,6 +67,127 @@ gradlePlugin {
 gradlePlugin.testSourceSets.add(sourceSets["functionalTest"])
 
 tasks.named<Task>("check") {
-    // Include functionalTest as part of the check lifecycle
+    // Include functionalTest in the check lifecycle and require coverage
+    // verification (which transitively runs jacocoTestReport so the HTML
+    // report is on disk even when the threshold check fails).
     dependsOn(testing.suites.named("functionalTest"))
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
+}
+
+// --- Kotlin compiler guardrail ---
+// Treat all Kotlin compiler warnings as errors on every KotlinCompile task
+// (main + test + functionalTest source sets). Catches deprecation usages,
+// unsafe casts, redundant null checks, etc. before they land in main.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        allWarningsAsErrors.set(true)
+    }
+}
+
+// --- Spotless formatting guardrail ---
+// Two extensions: kotlin{} for source .kt files, kotlinGradle{} for *.gradle.kts.
+// Using both is required — the kotlin extension does NOT pick up build scripts.
+spotless {
+    kotlin {
+        // Covers main, test, and functionalTest source sets — all live under src/<sourceSet>/kotlin.
+        target("src/**/*.kt")
+        targetExclude("**/build/**")
+        ktlint(libs.versions.ktlint.get())
+    }
+    kotlinGradle {
+        target("*.gradle.kts", "**/*.gradle.kts")
+        targetExclude("**/build/**")
+        ktlint(libs.versions.ktlint.get())
+    }
+}
+
+// --- Detekt static-analysis guardrail ---
+// Source coverage: all three source sets (main + test + functionalTest).
+// The default detekt task covers main + test automatically; functionalTest
+// requires explicit inclusion via detekt.source.
+//
+// Fail behavior in Detekt 1.23.x: the explicit failOnSeverity property
+// from Detekt 2.x does not exist on this version's DetektExtension. We
+// rely on the version-appropriate equivalent: detekt.yml's
+// `maxIssues: 0` combined with `warningsAsErrors: false` (both upstream
+// defaults). Error-severity findings push the issue count above 0 and
+// fail the build; warning-severity findings are excluded from the
+// count because `warningsAsErrors` is false.
+//
+// IMPORTANT: do NOT bump `maxIssues` in detekt.yml above 0 without
+// also reading the `warningsAsErrors` line. Bumping maxIssues to
+// reduce noise would silently start allowing warning-severity findings
+// through the gate. If a rule's noise is the problem, address it at
+// the rule level (set `active: false` or `severity: warning`) rather
+// than at the global threshold.
+detekt {
+    config.setFrom(rootProject.file("detekt.yml"))
+    buildUponDefaultConfig = true
+    source.setFrom(
+        files(
+            "src/main/kotlin",
+            "src/test/kotlin",
+            "src/functionalTest/kotlin",
+        ),
+    )
+    // ignoreFailures defaults to false — leave as-is. Build fails on error-severity rule hits.
+}
+
+// Configure JVM target for Detekt tasks to match Kotlin compilation.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "21"
+}
+
+// The Detekt plugin attaches the `detekt` task to `check` automatically.
+
+// --- JaCoCo coverage guardrail ---
+// Aggregate execution data from BOTH test suites (test + functionalTest) so
+// functional-test coverage counts toward the threshold. Functional tests
+// exercise real plugin code via TestKit, so excluding them would understate
+// real coverage.
+//
+// jacocoTestReport is wired into the check chain via
+// jacocoTestCoverageVerification's dependsOn, so the HTML report is on disk
+// even when verification fails — giving developers an immediate path to
+// identifying uncovered lines.
+tasks.named<JacocoReport>("jacocoTestReport") {
+    // Use explicit file paths rather than task providers here. Gradle 9.5.1 has
+    // an incompatibility passing JvmTestSuite task providers to JaCoCo's
+    // executionData() — it treats the task's binary test-results directory as
+    // an exec file and fails with "Unable to read execution data file". The
+    // explicit paths point to JaCoCo's default output location and work reliably.
+    executionData(
+        layout.buildDirectory.file("jacoco/test.exec"),
+        layout.buildDirectory.file("jacoco/functionalTest.exec"),
+    )
+    dependsOn(
+        tasks.named("test"),
+        tasks.named("functionalTest"),
+    )
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+    }
+}
+
+tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    // Use explicit file paths rather than task providers here. Gradle 9.5.1 has
+    // an incompatibility passing JvmTestSuite task providers to JaCoCo's
+    // executionData() — it treats the task's binary test-results directory as
+    // an exec file and fails with "Unable to read execution data file". The
+    // explicit paths point to JaCoCo's default output location and work reliably.
+    executionData(
+        layout.buildDirectory.file("jacoco/test.exec"),
+        layout.buildDirectory.file("jacoco/functionalTest.exec"),
+    )
+    dependsOn(tasks.named("jacocoTestReport"))
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
 }
