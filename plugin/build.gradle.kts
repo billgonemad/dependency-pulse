@@ -100,11 +100,20 @@ spotless {
 // The default detekt task covers main + test automatically; functionalTest
 // requires explicit inclusion via detekt.source.
 //
-// Fail behavior: Detekt 1.23.x's default (ignoreFailures = false, plus per-rule
-// severity in detekt.yml) already gives us "error-severity findings fail the build,
-// warning-severity findings report but do not fail." No explicit failOnSeverity
-// property is needed for the default ruleset. If you change a rule's severity in
-// detekt.yml, that severity governs whether it fails the build.
+// Fail behavior in Detekt 1.23.x: the explicit failOnSeverity property
+// from Detekt 2.x does not exist on this version's DetektExtension. We
+// rely on the version-appropriate equivalent: detekt.yml's
+// `maxIssues: 0` combined with `warningsAsErrors: false` (both upstream
+// defaults). Error-severity findings push the issue count above 0 and
+// fail the build; warning-severity findings are excluded from the
+// count because `warningsAsErrors` is false.
+//
+// IMPORTANT: do NOT bump `maxIssues` in detekt.yml above 0 without
+// also reading the `warningsAsErrors` line. Bumping maxIssues to
+// reduce noise would silently start allowing warning-severity findings
+// through the gate. If a rule's noise is the problem, address it at
+// the rule level (set `active: false` or `severity: warning`) rather
+// than at the global threshold.
 detekt {
     config.setFrom(rootProject.file("detekt.yml"))
     buildUponDefaultConfig = true

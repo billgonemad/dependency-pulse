@@ -1,3 +1,18 @@
+# IMPORTANT — fail-behavior policy:
+#
+# This project relies on `maxIssues: 0` + `warningsAsErrors: false`
+# (defaults) to give us "error-severity findings fail the build,
+# warning-severity findings report only." Detekt 1.23.x does not
+# expose a `failOnSeverity` property on the Gradle extension (that
+# API is Detekt 2.x), so this YAML pair is the only available
+# mechanism for that policy.
+#
+# DO NOT bump `maxIssues` above 0 without changing this policy
+# deliberately. Increasing it would silently allow warning-severity
+# findings to pass the gate (warnings only count toward maxIssues
+# if `warningsAsErrors: true`). If a specific rule is noisy, fix it
+# at the rule level (set `active: false` or lower its severity)
+# rather than relaxing the global threshold.
 build:
   maxIssues: 0
   excludeCorrectable: false
