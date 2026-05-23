@@ -15,6 +15,9 @@ plugins {
 
     // Apply Spotless for formatting enforcement (uses ktlint under the hood).
     alias(libs.plugins.spotless)
+
+    // Apply Detekt for static analysis on Kotlin source.
+    alias(libs.plugins.detekt)
 }
 
 repositories {
@@ -91,3 +94,33 @@ spotless {
         ktlint(libs.versions.ktlint.get())
     }
 }
+
+// --- Detekt static-analysis guardrail ---
+// Source coverage: all three source sets (main + test + functionalTest).
+// The default detekt task covers main + test automatically; functionalTest
+// requires explicit inclusion via detekt.source.
+//
+// Fail behavior: Detekt 1.23.x's default (ignoreFailures = false, plus per-rule
+// severity in detekt.yml) already gives us "error-severity findings fail the build,
+// warning-severity findings report but do not fail." No explicit failOnSeverity
+// property is needed for the default ruleset. If you change a rule's severity in
+// detekt.yml, that severity governs whether it fails the build.
+detekt {
+    config.setFrom(rootProject.file("detekt.yml"))
+    buildUponDefaultConfig = true
+    source.setFrom(
+        files(
+            "src/main/kotlin",
+            "src/test/kotlin",
+            "src/functionalTest/kotlin",
+        ),
+    )
+    // ignoreFailures defaults to false — leave as-is. Build fails on error-severity rule hits.
+}
+
+// Configure JVM target for Detekt tasks to match Kotlin compilation.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "21"
+}
+
+// The Detekt plugin attaches the `detekt` task to `check` automatically.

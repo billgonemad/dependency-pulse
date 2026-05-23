@@ -2,10 +2,12 @@
 # https://docs.gradle.org/current/userguide/version_catalogs.html#sec::toml-dependencies-format
 
 [versions]
+detekt = "1.23.8"      # latest stable; built against Kotlin 2.0.21, compatible with Kotlin 2.3 at impl time
 kotlin = "2.3.20"
 ktlint = "1.8.0"       # latest stable verified at impl time
 spotless = "8.5.1"     # latest stable verified at impl time
 
 [plugins]
+detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
