@@ -67,8 +67,11 @@ gradlePlugin {
 gradlePlugin.testSourceSets.add(sourceSets["functionalTest"])
 
 tasks.named<Task>("check") {
-    // Include functionalTest as part of the check lifecycle
+    // Include functionalTest in the check lifecycle and require coverage
+    // verification (which transitively runs jacocoTestReport so the HTML
+    // report is on disk even when the threshold check fails).
     dependsOn(testing.suites.named("functionalTest"))
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
 }
 
 // --- Kotlin compiler guardrail ---
@@ -148,6 +151,11 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 // even when verification fails — giving developers an immediate path to
 // identifying uncovered lines.
 tasks.named<JacocoReport>("jacocoTestReport") {
+    // Use explicit file paths rather than task providers here. Gradle 9.5.1 has
+    // an incompatibility passing JvmTestSuite task providers to JaCoCo's
+    // executionData() — it treats the task's binary test-results directory as
+    // an exec file and fails with "Unable to read execution data file". The
+    // explicit paths point to JaCoCo's default output location and work reliably.
     executionData(
         layout.buildDirectory.file("jacoco/test.exec"),
         layout.buildDirectory.file("jacoco/functionalTest.exec"),
@@ -163,6 +171,11 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 }
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    // Use explicit file paths rather than task providers here. Gradle 9.5.1 has
+    // an incompatibility passing JvmTestSuite task providers to JaCoCo's
+    // executionData() — it treats the task's binary test-results directory as
+    // an exec file and fails with "Unable to read execution data file". The
+    // explicit paths point to JaCoCo's default output location and work reliably.
     executionData(
         layout.buildDirectory.file("jacoco/test.exec"),
         layout.buildDirectory.file("jacoco/functionalTest.exec"),
@@ -177,8 +190,4 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
             }
         }
     }
-}
-
-tasks.named("check") {
-    dependsOn("jacocoTestCoverageVerification")
 }
