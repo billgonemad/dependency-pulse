@@ -10,6 +10,9 @@ plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     `java-gradle-plugin`
 
+    // Apply JaCoCo for code coverage reporting and verification.
+    `jacoco`
+
     // Apply the Kotlin JVM plugin to add support for Kotlin.
     alias(libs.plugins.kotlin.jvm)
 
@@ -133,3 +136,49 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 }
 
 // The Detekt plugin attaches the `detekt` task to `check` automatically.
+
+// --- JaCoCo coverage guardrail ---
+// Aggregate execution data from BOTH test suites (test + functionalTest) so
+// functional-test coverage counts toward the threshold. Functional tests
+// exercise real plugin code via TestKit, so excluding them would understate
+// real coverage.
+//
+// jacocoTestReport is wired into the check chain via
+// jacocoTestCoverageVerification's dependsOn, so the HTML report is on disk
+// even when verification fails — giving developers an immediate path to
+// identifying uncovered lines.
+tasks.named<JacocoReport>("jacocoTestReport") {
+    executionData(
+        layout.buildDirectory.file("jacoco/test.exec"),
+        layout.buildDirectory.file("jacoco/functionalTest.exec"),
+    )
+    dependsOn(
+        tasks.named("test"),
+        tasks.named("functionalTest"),
+    )
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+    }
+}
+
+tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    executionData(
+        layout.buildDirectory.file("jacoco/test.exec"),
+        layout.buildDirectory.file("jacoco/functionalTest.exec"),
+    )
+    dependsOn(tasks.named("jacocoTestReport"))
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn("jacocoTestCoverageVerification")
+}

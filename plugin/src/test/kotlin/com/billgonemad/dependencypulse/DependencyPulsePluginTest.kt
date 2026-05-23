@@ -4,8 +4,11 @@
 package com.billgonemad.dependencypulse
 
 import org.gradle.testfixtures.ProjectBuilder
+import java.io.ByteArrayOutputStream
+import java.io.PrintStream
 import kotlin.test.Test
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * A simple unit test for the 'com.billgonemad.dependencypulse.greeting' plugin.
@@ -18,5 +21,27 @@ class DependencyPulsePluginTest {
 
         // Verify the result
         assertNotNull(project.tasks.findByName("greeting"))
+    }
+
+    @Test fun `greeting task prints expected message when executed`() {
+        // Create a test project and apply the plugin
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependencypulse.greeting")
+        val task = project.tasks.getByName("greeting")
+
+        // Capture stdout to assert on the greeting message.
+        val captured = ByteArrayOutputStream()
+        val originalOut = System.out
+        System.setOut(PrintStream(captured))
+        try {
+            task.actions.forEach { it.execute(task) }
+        } finally {
+            System.setOut(originalOut)
+        }
+
+        assertTrue(
+            captured.toString().contains("Hello from plugin 'com.billgonemad.dependencypulse.greeting'"),
+            "greeting task must print the expected hello message",
+        )
     }
 }
