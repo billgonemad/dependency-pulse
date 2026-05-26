@@ -68,9 +68,8 @@ testing {
 }
 
 gradlePlugin {
-    // Define the plugin
-    val greeting by plugins.creating {
-        id = "com.billgonemad.dependencypulse.greeting"
+    val dependencyPulse by plugins.creating {
+        id = "com.billgonemad.dependency-pulse"
         implementationClass = "com.billgonemad.dependencypulse.DependencyPulsePlugin"
     }
 }
