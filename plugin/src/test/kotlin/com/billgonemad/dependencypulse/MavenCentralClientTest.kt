@@ -2,6 +2,7 @@ package com.billgonemad.dependencypulse
 
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.io.IOException
 import java.net.http.HttpClient
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -10,6 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MavenCentralClientTest {
     private lateinit var server: MockWebServer
@@ -87,5 +89,15 @@ class MavenCentralClientTest {
         assertFailsWith<Exception> {
             client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
         }
+    }
+
+    @Test fun `throws IOException on non-200 response`() {
+        server.enqueue(MockResponse().setResponseCode(429))
+
+        val ex =
+            assertFailsWith<IOException> {
+                client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+            }
+        assertTrue(ex.message?.contains("429") == true)
     }
 }

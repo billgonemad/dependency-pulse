@@ -18,6 +18,7 @@ class DependencyPulsePlugin : Plugin<Project> {
                 task.ignoreConfigurations.set(ext.ignoreConfigurations)
                 task.yellowAfterMonths.set(ext.thresholds.yellowAfterMonths)
                 task.redAfterMonths.set(ext.thresholds.redAfterMonths)
+                ext.githubToken?.let { task.githubToken.set(it) }
             }
         }
     }

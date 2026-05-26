@@ -17,6 +17,7 @@ import kotlin.test.assertTrue
 class DependencyPulsePluginFunctionalTest {
     companion object {
         private const val THREE_YEARS_MS = 3L * 365 * 24 * 3600 * 1000
+        private const val HTTP_503 = 503
     }
 
     @field:TempDir
@@ -79,6 +80,40 @@ class DependencyPulsePluginFunctionalTest {
         assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
         assertTrue(result.output.contains("dependencies scanned"))
+    }
+
+    @Test fun `failOnError causes build failure when Maven Central returns an error`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_503)
+            }
+
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                failOnError = true
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
+                .buildAndFail()
+
+        assertTrue(result.output.contains("❓"))
     }
 
     @Test fun `failOnRed causes build failure when latest release is stale`() {

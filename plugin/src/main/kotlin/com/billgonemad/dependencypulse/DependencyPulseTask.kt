@@ -5,6 +5,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 
 abstract class DependencyPulseTask : DefaultTask() {
@@ -25,6 +26,10 @@ abstract class DependencyPulseTask : DefaultTask() {
 
     @get:Input
     abstract val mavenCentralBaseUrl: Property<String>
+
+    @get:Input
+    @get:Optional
+    abstract val githubToken: Property<String>
 
     @TaskAction
     fun run() {

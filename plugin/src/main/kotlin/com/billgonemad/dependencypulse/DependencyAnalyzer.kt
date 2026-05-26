@@ -16,7 +16,7 @@ private fun defaultResolver(
 ): Set<Coords> =
     project.configurations
         .filter { it.isCanBeResolved && it.name !in ignore }
-        .flatMap { it.resolvedConfiguration.resolvedArtifacts }
+        .flatMap { it.resolvedConfiguration.lenientConfiguration.artifacts }
         .map {
             Coords(
                 it.moduleVersion.id.group,

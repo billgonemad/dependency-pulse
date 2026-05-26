@@ -2,7 +2,9 @@ package com.billgonemad.dependencypulse
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import java.net.URI
+import java.net.URLEncoder
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
@@ -10,14 +12,11 @@ import java.time.Duration
 import java.time.Instant
 
 private const val TIMEOUT_SECONDS = 10L
+private const val HTTP_OK = 200
 
 open class MavenCentralClient(
     private val baseUrl: String = "https://search.maven.org",
-    private val httpClient: HttpClient =
-        HttpClient
-            .newBuilder()
-            .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-            .build(),
+    private val httpClient: HttpClient = HttpClient.newBuilder().build(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -26,18 +25,16 @@ open class MavenCentralClient(
         artifact: String,
         version: String,
     ): MavenSignals? {
-        val latestDoc =
-            fetchDoc(
-                "$baseUrl/solrsearch/select?q=g:$group+AND+a:$artifact&rows=1&wt=json",
-            )
+        val g = encode(group)
+        val a = encode(artifact)
+        val v = encode(version)
+        val latestDoc = fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a&rows=1&wt=json")
         val latestVersion = latestDoc?.latestVersion
         val latestTimestamp = latestDoc?.timestamp
 
         return if (latestVersion != null && latestTimestamp != null) {
             val currentDoc =
-                fetchDoc(
-                    "$baseUrl/solrsearch/select?q=g:$group+AND+a:$artifact+AND+v:$version&rows=1&core=gav&wt=json",
-                )
+                fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a+AND+v:$v&rows=1&core=gav&wt=json")
             MavenSignals(
                 latestVersion = latestVersion,
                 latestReleaseDate = Instant.ofEpochMilli(latestTimestamp),
@@ -57,11 +54,16 @@ open class MavenCentralClient(
                 .GET()
                 .build()
         val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        if (response.statusCode() != HTTP_OK) {
+            throw IOException("Maven Central returned HTTP ${response.statusCode()} for $url")
+        }
         return json
             .decodeFromString<SolrSearchResponse>(response.body())
             .response.docs
             .firstOrNull()
     }
+
+    private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 }
 
 @Serializable
