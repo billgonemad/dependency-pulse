@@ -1,6 +1,7 @@
 package com.billgonemad.dependencypulse
 
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
@@ -27,6 +28,25 @@ abstract class DependencyPulseTask : DefaultTask() {
 
     @TaskAction
     fun run() {
-        // wired in Task 7
+        val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get())
+        val analyzer = DependencyAnalyzer(client)
+        val results =
+            analyzer.analyze(
+                project,
+                ignoreConfigurations.get(),
+                yellowAfterMonths.get(),
+                redAfterMonths.get(),
+            )
+        ReportPrinter.print(results)
+
+        if (failOnRed.get() && results.any { it.status == DepStatus.RED }) {
+            throw GradleException("dependency-pulse: one or more RED dependencies detected.")
+        }
+        if (failOnError.get() && results.any { it.status == DepStatus.UNKNOWN }) {
+            throw GradleException(
+                "dependency-pulse: one or more dependencies could not be checked " +
+                    "(set failOnError=false to suppress).",
+            )
+        }
     }
 }
