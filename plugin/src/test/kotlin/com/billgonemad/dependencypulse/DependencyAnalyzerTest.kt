@@ -31,7 +31,7 @@ class DependencyAnalyzerTest {
 
     private fun analyzerWith(
         signals: MavenSignals?,
-        coords: Set<Triple<String, String, String>>,
+        coords: Set<Coords>,
     ): DependencyAnalyzer {
         val resolver = { _: Project, _: List<String> -> coords }
         return DependencyAnalyzer(stubClient(signals), resolver)
@@ -40,7 +40,7 @@ class DependencyAnalyzerTest {
     @Test fun `deduplicates coordinates across configurations`() {
         val coords =
             setOf(
-                Triple("org.example", "foo", "1.0"),
+                Coords("org.example", "foo", "1.0"),
             )
         val analyzer = analyzerWith(greenSignals, coords)
 
@@ -54,7 +54,7 @@ class DependencyAnalyzerTest {
         var capturedIgnore: List<String>? = null
         val resolver = { _: Project, ignore: List<String> ->
             capturedIgnore = ignore
-            emptySet<Triple<String, String, String>>()
+            emptySet<Coords>()
         }
         val analyzer = DependencyAnalyzer(stubClient(greenSignals), resolver)
 
@@ -64,7 +64,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `returns RED when artifact not found on Central`() {
-        val analyzer = analyzerWith(null, setOf(Triple("com.example", "gone", "1.0")))
+        val analyzer = analyzerWith(null, setOf(Coords("com.example", "gone", "1.0")))
 
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
 
@@ -73,7 +73,7 @@ class DependencyAnalyzerTest {
 
     @Test fun `returns UNKNOWN and sets errorMessage when client throws`() {
         val resolver = { _: Project, _: List<String> ->
-            setOf(Triple("org.example", "bad", "1.0"))
+            setOf(Coords("org.example", "bad", "1.0"))
         }
         val analyzer = DependencyAnalyzer(throwingClient(), resolver)
 
@@ -84,7 +84,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `returns GREEN for recent artifact`() {
-        val analyzer = analyzerWith(greenSignals, setOf(Triple("org.example", "fresh", "1.0")))
+        val analyzer = analyzerWith(greenSignals, setOf(Coords("org.example", "fresh", "1.0")))
 
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
 

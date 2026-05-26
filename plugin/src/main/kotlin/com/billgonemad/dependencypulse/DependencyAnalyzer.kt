@@ -2,26 +2,38 @@ package com.billgonemad.dependencypulse
 
 import org.gradle.api.Project
 
-private typealias Coords = Triple<String, String, String>
+internal data class Coords(
+    val group: String,
+    val artifact: String,
+    val version: String,
+)
 
-private typealias Resolver = (project: Project, ignoreConfigurations: List<String>) -> Set<Coords>
+internal typealias Resolver = (project: Project, ignoreConfigurations: List<String>) -> Set<Coords>
+
+private fun defaultResolver(
+    project: Project,
+    ignore: List<String>,
+): Set<Coords> =
+    project.configurations
+        .filter { it.isCanBeResolved && it.name !in ignore }
+        .flatMap { it.resolvedConfiguration.resolvedArtifacts }
+        .map {
+            Coords(
+                it.moduleVersion.id.group,
+                it.moduleVersion.id.name,
+                it.moduleVersion.id.version,
+            )
+        }.toSet()
 
 class DependencyAnalyzer(
     private val client: MavenCentralClient,
-    private val resolver: Resolver =
-        { project, ignore ->
-            project.configurations
-                .filter { it.isCanBeResolved && it.name !in ignore }
-                .flatMap { it.resolvedConfiguration.resolvedArtifacts }
-                .map {
-                    Triple(
-                        it.moduleVersion.id.group,
-                        it.moduleVersion.id.name,
-                        it.moduleVersion.id.version,
-                    )
-                }.toSet()
-        },
 ) {
+    private var resolver: Resolver = ::defaultResolver
+
+    internal constructor(client: MavenCentralClient, resolver: Resolver) : this(client) {
+        this.resolver = resolver
+    }
+
     fun analyze(
         project: Project,
         ignoreConfigurations: List<String>,
@@ -29,7 +41,7 @@ class DependencyAnalyzer(
         redAfterMonths: Int,
     ): List<DependencyInfo> =
         resolver(project, ignoreConfigurations)
-            .sortedWith(compareBy({ it.first }, { it.second }))
+            .sortedWith(compareBy({ it.group }, { it.artifact }))
             .map { (group, artifact, version) ->
                 try {
                     val signals = client.fetchSignals(group, artifact, version)
