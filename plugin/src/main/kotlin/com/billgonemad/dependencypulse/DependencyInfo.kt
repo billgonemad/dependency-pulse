@@ -22,9 +22,9 @@ data class DependencyInfo(
     val currentVersion: String,
     val mavenSignals: MavenSignals?,
     val githubSignals: GitHubSignals?,
-    val javaxBlocker: Boolean = false,
     val status: DepStatus,
     val errorMessage: String?,
+    val javaxBlocker: Boolean = false,
 )
 
 private const val DAYS_PER_MONTH = 30
