@@ -13,7 +13,7 @@ object ReportPrinter {
             val emoji =
                 when (dep.status) {
                     DepStatus.GREEN -> "✅"
-                    DepStatus.YELLOW -> "⚠️ "
+                    DepStatus.YELLOW -> "⚠️"
                     DepStatus.RED -> "🔴"
                     DepStatus.UNKNOWN -> "❓"
                 }
