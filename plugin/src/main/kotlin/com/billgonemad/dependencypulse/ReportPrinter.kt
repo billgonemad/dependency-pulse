@@ -6,7 +6,10 @@ import java.time.temporal.ChronoUnit
 private const val DAYS_PER_MONTH = 30
 
 object ReportPrinter {
-    fun print(results: List<DependencyInfo>) {
+    fun print(
+        results: List<DependencyInfo>,
+        now: Instant = Instant.now(),
+    ) {
         println("Dependency Pulse Report")
         println("=======================")
         results.forEach { dep ->
@@ -23,14 +26,15 @@ object ReportPrinter {
                     println("   Maven Central unavailable — skipped (set failOnError=true to fail the build)")
                 }
 
-                dep.mavenSignals == null -> {
+                dep.status == DepStatus.RED && dep.mavenSignals == null -> {
                     println("   Artifact no longer published to Maven Central")
                 }
 
                 else -> {
-                    val months = monthsAgo(dep.mavenSignals.latestReleaseDate)
+                    val signals = dep.mavenSignals ?: return@forEach
+                    val months = monthsAgo(signals.latestReleaseDate, now)
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
-                    println("   Latest: ${dep.mavenSignals.latestVersion} | Released: $months months ago$active")
+                    println("   Latest: ${signals.latestVersion} | Released: $months months ago$active")
                 }
             }
             println()
@@ -43,5 +47,8 @@ object ReportPrinter {
         println("${results.size} dependencies scanned. $red red, $yellow yellow, $green green, $unknown unknown.")
     }
 
-    private fun monthsAgo(date: Instant): Int = (ChronoUnit.DAYS.between(date, Instant.now()) / DAYS_PER_MONTH).toInt()
+    private fun monthsAgo(
+        date: Instant,
+        now: Instant,
+    ): Int = (ChronoUnit.DAYS.between(date, now) / DAYS_PER_MONTH).toInt()
 }

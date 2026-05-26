@@ -41,21 +41,20 @@ class ReportPrinterTest {
 
     @Test fun `GREEN dep shows checkmark and Active`() {
         val now = Instant.now()
-        val output =
-            capture {
-                ReportPrinter.print(listOf(dep(signals = MavenSignals("1.0", now, now), status = DepStatus.GREEN)))
-            }
+        val depList = listOf(dep(signals = MavenSignals("1.0", now, now), status = DepStatus.GREEN))
+        val output = capture { ReportPrinter.print(depList, now = now) }
         assertTrue(output.contains("✅"))
         assertTrue(output.contains("Active"))
+        assertTrue(output.contains("0 months ago"))
     }
 
     @Test fun `YELLOW dep shows warning emoji`() {
-        val old = Instant.now().minus(400, ChronoUnit.DAYS)
-        val output =
-            capture {
-                ReportPrinter.print(listOf(dep(signals = MavenSignals("1.0", old, old), status = DepStatus.YELLOW)))
-            }
+        val refNow = Instant.now()
+        val old = refNow.minus(400, ChronoUnit.DAYS)
+        val depList = listOf(dep(signals = MavenSignals("1.0", old, old), status = DepStatus.YELLOW))
+        val output = capture { ReportPrinter.print(depList, now = refNow) }
         assertTrue(output.contains("⚠️"))
+        assertTrue(output.contains("13 months ago"))
     }
 
     @Test fun `RED dep with null signals shows not-published message`() {
@@ -85,7 +84,7 @@ class ReportPrinterTest {
                 dep(status = DepStatus.RED),
                 dep(status = DepStatus.UNKNOWN, errorMessage = "err"),
             )
-        val output = capture { ReportPrinter.print(deps) }
+        val output = capture { ReportPrinter.print(deps, now = Instant.now()) }
         assertTrue(output.contains("4 dependencies scanned"))
         assertTrue(output.contains("1 red"))
         assertTrue(output.contains("1 yellow"))
