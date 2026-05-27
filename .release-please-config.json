@@ -1,0 +1,8 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "java",
+      "bump-minor-pre-major": true
+    }
+  }
+}
