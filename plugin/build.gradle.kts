@@ -21,11 +21,18 @@ plugins {
 
     // Apply Detekt for static analysis on Kotlin source.
     alias(libs.plugins.detekt)
+
+    // Apply Kotlin serialization plugin (same version as the compiler).
+    alias(libs.plugins.kotlin.serialization)
 }
 
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
+}
+
+dependencies {
+    implementation(libs.kotlinx.serialization.json)
 }
 
 testing {
@@ -34,6 +41,9 @@ testing {
         val test by getting(JvmTestSuite::class) {
             // Use Kotlin Test test framework
             useKotlinTest(libs.versions.kotlin.get())
+            dependencies {
+                implementation(libs.mockwebserver)
+            }
         }
 
         // Create a new test suite
@@ -44,6 +54,7 @@ testing {
             dependencies {
                 // functionalTest test suite depends on the production code in tests
                 implementation(project())
+                implementation(libs.mockwebserver)
             }
 
             targets {
@@ -57,9 +68,8 @@ testing {
 }
 
 gradlePlugin {
-    // Define the plugin
-    val greeting by plugins.creating {
-        id = "com.billgonemad.dependencypulse.greeting"
+    val dependencyPulse by plugins.creating {
+        id = "com.billgonemad.dependency-pulse"
         implementationClass = "com.billgonemad.dependencypulse.DependencyPulsePlugin"
     }
 }
