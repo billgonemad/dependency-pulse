@@ -24,7 +24,12 @@ plugins {
 
     // Apply Kotlin serialization plugin (same version as the compiler).
     alias(libs.plugins.kotlin.serialization)
+
+    alias(libs.plugins.plugin.publish)
 }
+
+group = "com.billgonemad"
+version = property("version") as String
 
 repositories {
     // Use Maven Central for resolving dependencies.
@@ -68,9 +73,14 @@ testing {
 }
 
 gradlePlugin {
+    website = "https://github.com/billgonemad/dependency-pulse"
+    vcsUrl = "https://github.com/billgonemad/dependency-pulse"
     val dependencyPulse by plugins.creating {
         id = "com.billgonemad.dependency-pulse"
         implementationClass = "com.billgonemad.dependencypulse.DependencyPulsePlugin"
+        displayName = "Dependency Pulse"
+        description = "Detects abandoned or stale JVM dependencies"
+        tags = listOf("dependencies", "jvm", "maintenance")
     }
 }
 

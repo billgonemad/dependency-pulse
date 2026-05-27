@@ -7,7 +7,9 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 
+@DisableCachingByDefault(because = "Fetches live data from external APIs")
 abstract class DependencyPulseTask : DefaultTask() {
     @get:Input
     abstract val failOnRed: Property<Boolean>
