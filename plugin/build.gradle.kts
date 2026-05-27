@@ -84,6 +84,19 @@ gradlePlugin {
     }
 }
 
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/billgonemad/dependency-pulse")
+            credentials {
+                username = providers.environmentVariable("GITHUB_ACTOR").getOrElse("")
+                password = providers.environmentVariable("GITHUB_TOKEN").getOrElse("")
+            }
+        }
+    }
+}
+
 gradlePlugin.testSourceSets.add(sourceSets["functionalTest"])
 
 tasks.named<Task>("check") {
