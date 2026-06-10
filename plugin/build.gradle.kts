@@ -168,6 +168,10 @@ dependencyCheck {
     failBuildOnCVSS = 7.0f
     analyzers {
         assemblyEnabled = false // not a .NET project
+        ossIndex {
+            username = System.getenv("OSSINDEX_USERNAME") ?: ""
+            password = System.getenv("OSSINDEX_APITOKEN") ?: ""
+        }
     }
     nvd {
         apiKey = System.getenv("NVD_API_KEY") ?: ""

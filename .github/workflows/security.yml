@@ -29,6 +29,8 @@ jobs:
         run: ./gradlew :plugin:dependencyCheckAnalyze --stacktrace
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_APITOKEN: ${{ secrets.OSSINDEX_APITOKEN }}
 
       - name: Upload report
         if: always()
