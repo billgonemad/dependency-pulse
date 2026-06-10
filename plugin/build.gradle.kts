@@ -63,7 +63,13 @@ testing {
             targets {
                 all {
                     // This test suite should run after the built-in test suite has run its tests
-                    testTask.configure { shouldRunAfter(test) }
+                    testTask.configure {
+                        shouldRunAfter(test)
+                        systemProperty(
+                            "testGradleVersion",
+                            project.findProperty("testGradleVersion")?.toString() ?: "",
+                        )
+                    }
                 }
             }
         }
@@ -154,7 +160,7 @@ detekt {
 dependencyCheck {
     failBuildOnCVSS = 7.0f
     analyzers {
-        assemblyEnabled = false   // not a .NET project
+        assemblyEnabled = false // not a .NET project
     }
     nvd {
         apiKey = System.getenv("NVD_API_KEY") ?: ""
