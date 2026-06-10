@@ -152,6 +152,13 @@ detekt {
     // ignoreFailures defaults to false — leave as-is. Build fails on error-severity rule hits.
 }
 
+// Configure JVM target for Detekt tasks to match Kotlin compilation.
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "21"
+}
+
+// The Detekt plugin attaches the `detekt` task to `check` automatically.
+
 // --- OWASP Dependency Check ---
 // Fail the build if any dependency has a CVSS score >= 7.0 (High or Critical).
 // Run via: ./gradlew :plugin:dependencyCheckAnalyze
@@ -166,13 +173,6 @@ dependencyCheck {
         apiKey = System.getenv("NVD_API_KEY") ?: ""
     }
 }
-
-// Configure JVM target for Detekt tasks to match Kotlin compilation.
-tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
-    jvmTarget = "21"
-}
-
-// The Detekt plugin attaches the `detekt` task to `check` automatically.
 
 // --- JaCoCo coverage guardrail ---
 // Aggregate execution data from BOTH test suites (test + functionalTest) so
