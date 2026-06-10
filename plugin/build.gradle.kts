@@ -22,6 +22,9 @@ plugins {
     // Apply Detekt for static analysis on Kotlin source.
     alias(libs.plugins.detekt)
 
+    // Apply OWASP Dependency Check for CVE scanning.
+    alias(libs.plugins.dependency.check)
+
     // Apply Kotlin serialization plugin (same version as the compiler).
     alias(libs.plugins.kotlin.serialization)
 }
@@ -141,6 +144,21 @@ detekt {
         ),
     )
     // ignoreFailures defaults to false — leave as-is. Build fails on error-severity rule hits.
+}
+
+// --- OWASP Dependency Check ---
+// Fail the build if any dependency has a CVSS score >= 7.0 (High or Critical).
+// Run via: ./gradlew :plugin:dependencyCheckAnalyze
+// NVD API key (free): https://nvd.nist.gov/developers/request-an-api-key
+// Without the key the scan works but the initial NVD database download is slow.
+dependencyCheck {
+    failBuildOnCVSS = 7.0f
+    analyzers {
+        assemblyEnabled = false   // not a .NET project
+    }
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY") ?: ""
+    }
 }
 
 // Configure JVM target for Detekt tasks to match Kotlin compilation.
