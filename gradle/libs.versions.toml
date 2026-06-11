@@ -14,7 +14,7 @@
 # failOnSeverity API the design spec originally referenced).
 detekt = "1.23.8"
 owasp-dependency-check = "12.2.2"
-kotlin = "2.3.20"
+kotlin = "2.4.0"
 kotlinx-serialization = "1.8.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
 mockwebserver = "4.12.0"
