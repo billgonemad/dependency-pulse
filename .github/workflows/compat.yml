@@ -29,7 +29,7 @@ jobs:
           java-version: ${{ matrix.java-version }}
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Functional tests (Gradle ${{ matrix.gradle-version }})
         run: ./gradlew :plugin:functionalTest -PtestGradleVersion=${{ matrix.gradle-version }} --stacktrace
