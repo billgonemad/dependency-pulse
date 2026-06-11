@@ -43,8 +43,6 @@ class DependencyPulsePluginTest {
             t.redAfterMonths.set(18)
         }
 
-        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
-
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals(true, task.failOnRed.get())
         assertEquals(true, task.failOnError.get())
@@ -71,8 +69,6 @@ class DependencyPulsePluginTest {
 
         val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
         ext.githubToken.set("my-token")
-
-        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
 
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals("my-token", task.githubToken.get())
