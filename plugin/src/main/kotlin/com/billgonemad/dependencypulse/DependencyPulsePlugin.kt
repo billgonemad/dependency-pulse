@@ -22,7 +22,9 @@ class DependencyPulsePlugin : Plugin<Project> {
 
         project.tasks.register("dependencyPulse", DependencyPulseTask::class.java) { task ->
             task.mavenCentralBaseUrl.set(
-                System.getProperty("mavenCentralBaseUrl", "https://search.maven.org"),
+                project.providers
+                    .systemProperty("mavenCentralBaseUrl")
+                    .orElse("https://search.maven.org"),
             )
             task.failOnRed.set(ext.failOnRed)
             task.failOnError.set(ext.failOnError)

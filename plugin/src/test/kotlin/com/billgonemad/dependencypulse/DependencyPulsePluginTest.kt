@@ -52,6 +52,18 @@ class DependencyPulsePluginTest {
         assertEquals("https://search.maven.org", task.mavenCentralBaseUrl.get())
     }
 
+    @Test fun `mavenCentralBaseUrl can be overridden via system property`() {
+        System.setProperty("mavenCentralBaseUrl", "http://localhost:8080")
+        try {
+            val project = ProjectBuilder.builder().build()
+            project.plugins.apply("com.billgonemad.dependency-pulse")
+            val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+            assertEquals("http://localhost:8080", task.mavenCentralBaseUrl.get())
+        } finally {
+            System.clearProperty("mavenCentralBaseUrl")
+        }
+    }
+
     @Test fun `extension githubToken defaults to not present`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("com.billgonemad.dependency-pulse")
