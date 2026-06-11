@@ -1,9 +1,9 @@
 package com.billgonemad.dependencypulse
 
-import org.gradle.api.internal.project.ProjectInternal
 import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 
 class DependencyPulsePluginTest {
@@ -20,27 +20,28 @@ class DependencyPulsePluginTest {
 
         val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
 
-        assertEquals(false, ext.failOnRed)
-        assertEquals(false, ext.failOnError)
-        assertEquals(12, ext.thresholds.yellowAfterMonths)
-        assertEquals(24, ext.thresholds.redAfterMonths)
-        assertNotNull(ext.ignoreConfigurations)
+        assertEquals(false, ext.failOnRed.get())
+        assertEquals(false, ext.failOnError.get())
+        assertEquals(12, ext.thresholds.yellowAfterMonths.get())
+        assertEquals(24, ext.thresholds.redAfterMonths.get())
+        assertEquals(
+            listOf("testImplementation", "testRuntimeOnly", "testCompileClasspath", "testRuntimeClasspath"),
+            ext.ignoreConfigurations.get(),
+        )
     }
 
-    @Test fun `afterEvaluate propagates extension values to task`() {
+    @Test fun `lazy configuration propagates extension values to task`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("com.billgonemad.dependency-pulse")
 
         val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
-        ext.failOnRed = true
-        ext.failOnError = true
-        ext.ignoreConfigurations = listOf("compileClasspath")
+        ext.failOnRed.set(true)
+        ext.failOnError.set(true)
+        ext.ignoreConfigurations.set(listOf("compileClasspath"))
         ext.thresholds { t ->
-            t.yellowAfterMonths = 6
-            t.redAfterMonths = 18
+            t.yellowAfterMonths.set(6)
+            t.redAfterMonths.set(18)
         }
-
-        (project as ProjectInternal).evaluate()
 
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals(true, task.failOnRed.get())
@@ -51,14 +52,37 @@ class DependencyPulsePluginTest {
         assertEquals("https://search.maven.org", task.mavenCentralBaseUrl.get())
     }
 
-    @Test fun `extension githubToken defaults to null`() {
+    @Test fun `mavenCentralBaseUrl can be overridden via system property`() {
+        System.setProperty("mavenCentralBaseUrl", "http://localhost:8080")
+        try {
+            val project = ProjectBuilder.builder().build()
+            project.plugins.apply("com.billgonemad.dependency-pulse")
+            val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+            assertEquals("http://localhost:8080", task.mavenCentralBaseUrl.get())
+        } finally {
+            System.clearProperty("mavenCentralBaseUrl")
+        }
+    }
+
+    @Test fun `extension githubToken defaults to not present`() {
         val project = ProjectBuilder.builder().build()
         project.plugins.apply("com.billgonemad.dependency-pulse")
 
         val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
-        assertEquals(null, ext.githubToken)
+        assertFalse(ext.githubToken.isPresent)
 
-        ext.githubToken = "token-value"
-        assertEquals("token-value", ext.githubToken)
+        ext.githubToken.set("token-value")
+        assertEquals("token-value", ext.githubToken.get())
+    }
+
+    @Test fun `githubToken is propagated to task when set`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
+        ext.githubToken.set("my-token")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        assertEquals("my-token", task.githubToken.get())
     }
 }
