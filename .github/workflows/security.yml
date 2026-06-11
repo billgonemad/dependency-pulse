@@ -3,8 +3,6 @@ name: Security Scan
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   schedule:
     - cron: '0 9 * * 1'   # every Monday at 09:00 UTC
 
