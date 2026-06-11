@@ -24,7 +24,10 @@ class DependencyPulsePluginTest {
         assertEquals(false, ext.failOnError.get())
         assertEquals(12, ext.thresholds.yellowAfterMonths.get())
         assertEquals(24, ext.thresholds.redAfterMonths.get())
-        assertNotNull(ext.ignoreConfigurations.get())
+        assertEquals(
+            listOf("testImplementation", "testRuntimeOnly", "testCompileClasspath", "testRuntimeClasspath"),
+            ext.ignoreConfigurations.get(),
+        )
     }
 
     @Test fun `lazy configuration propagates extension values to task`() {
@@ -60,5 +63,18 @@ class DependencyPulsePluginTest {
 
         ext.githubToken.set("token-value")
         assertEquals("token-value", ext.githubToken.get())
+    }
+
+    @Test fun `githubToken is propagated to task when set`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val ext = project.extensions.getByType(DependencyPulseExtension::class.java)
+        ext.githubToken.set("my-token")
+
+        (project as org.gradle.api.internal.project.ProjectInternal).evaluate()
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        assertEquals("my-token", task.githubToken.get())
     }
 }
