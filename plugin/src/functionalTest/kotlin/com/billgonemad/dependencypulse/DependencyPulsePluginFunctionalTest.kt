@@ -73,6 +73,7 @@ class DependencyPulsePluginFunctionalTest {
                 .create()
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
+                .withCompatGradleVersion()
                 .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
                 .build()
 
@@ -110,6 +111,7 @@ class DependencyPulsePluginFunctionalTest {
                 .create()
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
+                .withCompatGradleVersion()
                 .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
                 .buildAndFail()
 
@@ -153,9 +155,15 @@ class DependencyPulsePluginFunctionalTest {
                 .create()
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
+                .withCompatGradleVersion()
                 .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
                 .buildAndFail()
 
         assertTrue(result.output.contains("🔴"))
     }
+}
+
+private fun GradleRunner.withCompatGradleVersion(): GradleRunner {
+    val version = System.getProperty("testGradleVersion")?.takeIf { it.isNotBlank() }
+    return if (version != null) withGradleVersion(version) else this
 }

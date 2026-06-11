@@ -1,0 +1,44 @@
+name: Gradle Compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  compat:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - gradle-version: '7.6.4'
+            java-version: '17'
+          - gradle-version: '8.10.2'
+            java-version: '21'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java-version }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Functional tests (Gradle ${{ matrix.gradle-version }})
+        run: ./gradlew :plugin:functionalTest -PtestGradleVersion=${{ matrix.gradle-version }} --stacktrace
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compat-reports-gradle-${{ matrix.gradle-version }}
+          path: plugin/build/reports/tests/functionalTest/**
+          retention-days: 14
+          if-no-files-found: ignore

@@ -22,6 +22,9 @@ plugins {
     // Apply Detekt for static analysis on Kotlin source.
     alias(libs.plugins.detekt)
 
+    // Apply OWASP Dependency Check for CVE scanning.
+    alias(libs.plugins.dependency.check)
+
     // Apply Kotlin serialization plugin (same version as the compiler).
     alias(libs.plugins.kotlin.serialization)
 }
@@ -60,7 +63,13 @@ testing {
             targets {
                 all {
                     // This test suite should run after the built-in test suite has run its tests
-                    testTask.configure { shouldRunAfter(test) }
+                    testTask.configure {
+                        shouldRunAfter(test)
+                        systemProperty(
+                            "testGradleVersion",
+                            project.findProperty("testGradleVersion")?.toString() ?: "",
+                        )
+                    }
                 }
             }
         }
@@ -149,6 +158,25 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 }
 
 // The Detekt plugin attaches the `detekt` task to `check` automatically.
+
+// --- OWASP Dependency Check ---
+// Fail the build if any dependency has a CVSS score >= 7.0 (High or Critical).
+// Run via: ./gradlew :plugin:dependencyCheckAnalyze
+// NVD API key (free): https://nvd.nist.gov/developers/request-an-api-key
+// Without the key the scan works but the initial NVD database download is slow.
+dependencyCheck {
+    failBuildOnCVSS = 7.0f
+    analyzers {
+        assemblyEnabled = false // not a .NET project
+        ossIndex {
+            username = System.getenv("OSSINDEX_USERNAME") ?: ""
+            password = System.getenv("OSSINDEX_APITOKEN") ?: ""
+        }
+    }
+    nvd {
+        apiKey = System.getenv("NVD_API_KEY") ?: ""
+    }
+}
 
 // --- JaCoCo coverage guardrail ---
 // Aggregate execution data from BOTH test suites (test + functionalTest) so

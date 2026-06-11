@@ -1,0 +1,42 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 9 * * 1'   # every Monday at 09:00 UTC
+
+jobs:
+  owasp-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: OWASP Dependency Check
+        run: ./gradlew :plugin:dependencyCheckAnalyze --stacktrace
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+          OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
+          OSSINDEX_APITOKEN: ${{ secrets.OSSINDEX_APITOKEN }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: plugin/build/reports/dependency-check-report.html
+          retention-days: 30
+          if-no-files-found: ignore

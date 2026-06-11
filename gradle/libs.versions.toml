@@ -13,6 +13,7 @@
 # 1.23.x patch or Detekt 2.x — the latter natively supports the
 # failOnSeverity API the design spec originally referenced).
 detekt = "1.23.8"
+owasp-dependency-check = "12.2.2"
 kotlin = "2.3.20"
 kotlinx-serialization = "1.8.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
@@ -24,6 +25,7 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.ref = "mockwebserver" }
 
 [plugins]
+dependency-check = { id = "org.owasp.dependencycheck", version.ref = "owasp-dependency-check" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
