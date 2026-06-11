@@ -1,31 +1,33 @@
 package com.billgonemad.dependencypulse
 
 import org.gradle.api.Action
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+import javax.inject.Inject
 
-open class DependencyPulseExtension {
-    var failOnRed: Boolean = false
-    var failOnError: Boolean = false
-    var ignoreConfigurations: List<String> =
-        listOf(
-            "testImplementation",
-            "testRuntimeOnly",
-            "testCompileClasspath",
-            "testRuntimeClasspath",
-        )
-    var githubToken: String? = null
-    val thresholds: Thresholds = Thresholds()
+abstract class DependencyPulseExtension
+    @Inject
+    constructor(
+        objects: ObjectFactory,
+    ) {
+        abstract val failOnRed: Property<Boolean>
+        abstract val failOnError: Property<Boolean>
+        abstract val ignoreConfigurations: ListProperty<String>
+        abstract val githubToken: Property<String>
+        val thresholds: Thresholds = objects.newInstance(Thresholds::class.java)
 
-    fun thresholds(action: Action<Thresholds>) {
-        action.execute(thresholds)
-    }
+        fun thresholds(action: Action<Thresholds>) {
+            action.execute(thresholds)
+        }
 
-    class Thresholds {
-        var yellowAfterMonths: Int = DEFAULT_YELLOW_AFTER_MONTHS
-        var redAfterMonths: Int = DEFAULT_RED_AFTER_MONTHS
+        abstract class Thresholds {
+            abstract val yellowAfterMonths: Property<Int>
+            abstract val redAfterMonths: Property<Int>
 
-        companion object {
-            const val DEFAULT_YELLOW_AFTER_MONTHS = 12
-            const val DEFAULT_RED_AFTER_MONTHS = 24
+            companion object {
+                const val DEFAULT_YELLOW_AFTER_MONTHS = 12
+                const val DEFAULT_RED_AFTER_MONTHS = 24
+            }
         }
     }
-}
