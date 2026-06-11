@@ -31,7 +31,6 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
           OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
           OSSINDEX_APITOKEN: ${{ secrets.OSSINDEX_APITOKEN }}
-          GRADLE_OPTS: -Xmx2g
 
       - name: Upload report
         if: always()
