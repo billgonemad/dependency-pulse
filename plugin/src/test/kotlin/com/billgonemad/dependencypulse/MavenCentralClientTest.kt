@@ -39,18 +39,12 @@ class MavenCentralClientTest {
                 """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
             ),
         )
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"timestamp":1700000000000}]}}""",
-            ),
-        )
 
-        val result = client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
 
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
         assertNotNull(result.latestReleaseDate)
-        assertNotNull(result.currentVersionDate)
     }
 
     @Test fun `returns null when artifact not found on Central`() {
@@ -60,34 +54,16 @@ class MavenCentralClientTest {
             ),
         )
 
-        val result = client.fetchSignals("com.example", "nonexistent", "1.0")
+        val result = client.fetchSignals("com.example", "nonexistent")
 
         assertNull(result)
-    }
-
-    @Test fun `currentVersionDate is null when specific version not found`() {
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
-            ),
-        )
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":0,"docs":[]}}""",
-            ),
-        )
-
-        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0-SNAPSHOT")
-
-        assertNotNull(result)
-        assertNull(result.currentVersionDate)
     }
 
     @Test fun `throws when server is unreachable`() {
         server.shutdown()
 
         assertFailsWith<Exception> {
-            client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+            client.fetchSignals("org.slf4j", "slf4j-api")
         }
     }
 
@@ -96,7 +72,7 @@ class MavenCentralClientTest {
 
         val ex =
             assertFailsWith<IOException> {
-                client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+                client.fetchSignals("org.slf4j", "slf4j-api")
             }
         assertTrue(ex.message?.contains("429") == true)
     }

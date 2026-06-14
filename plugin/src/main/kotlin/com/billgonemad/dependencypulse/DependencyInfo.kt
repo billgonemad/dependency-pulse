@@ -8,7 +8,6 @@ enum class DepStatus { GREEN, YELLOW, RED, UNKNOWN }
 data class MavenSignals(
     val latestVersion: String,
     val latestReleaseDate: Instant,
-    val currentVersionDate: Instant?,
 )
 
 data class GitHubSignals(

@@ -8,7 +8,7 @@ import kotlin.test.assertFalse
 class DependencyInfoTest {
     @Test
     fun `DependencyInfo holds all fields`() {
-        val maven = MavenSignals("2.0", Instant.EPOCH, Instant.EPOCH)
+        val maven = MavenSignals("2.0", Instant.EPOCH)
         val github = GitHubSignals(Instant.EPOCH, false)
         val info =
             DependencyInfo(

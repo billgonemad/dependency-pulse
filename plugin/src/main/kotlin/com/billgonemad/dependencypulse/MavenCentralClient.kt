@@ -23,22 +23,17 @@ open class MavenCentralClient(
     open fun fetchSignals(
         group: String,
         artifact: String,
-        version: String,
     ): MavenSignals? {
         val g = encode(group)
         val a = encode(artifact)
-        val v = encode(version)
         val latestDoc = fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a&rows=1&wt=json")
         val latestVersion = latestDoc?.latestVersion
         val latestTimestamp = latestDoc?.timestamp
 
         return if (latestVersion != null && latestTimestamp != null) {
-            val currentDoc =
-                fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a+AND+v:$v&rows=1&core=gav&wt=json")
             MavenSignals(
                 latestVersion = latestVersion,
                 latestReleaseDate = Instant.ofEpochMilli(latestTimestamp),
-                currentVersionDate = currentDoc?.timestamp?.let { Instant.ofEpochMilli(it) },
             )
         } else {
             null
