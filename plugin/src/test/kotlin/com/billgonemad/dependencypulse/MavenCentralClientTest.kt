@@ -119,4 +119,22 @@ class MavenCentralClientTest {
         assertNotNull(result)
         assertEquals(2, server.requestCount)
     }
+
+    @Test fun `caches URL responses — server receives each URL only once per client instance`() {
+        // fetchSignals makes 1 request per artifact.
+        // Calling it twice with identical args should hit the cache on the second call.
+        // We enqueue 2 responses but expect only 1 to be consumed.
+        repeat(2) {
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                ),
+            )
+        }
+
+        client.fetchSignals("org.slf4j", "slf4j-api")
+        client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertEquals(1, server.requestCount)
+    }
 }

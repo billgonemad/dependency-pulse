@@ -34,6 +34,7 @@ open class MavenCentralClient(
     private val retryDelayMs: Long = 1_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val urlCache = HashMap<String, SolrDoc?>()
 
     open fun fetchSignals(
         group: String,
@@ -56,6 +57,7 @@ open class MavenCentralClient(
     }
 
     private fun fetchDoc(url: String): SolrDoc? {
+        if (urlCache.containsKey(url)) return urlCache[url]
         val request =
             HttpRequest
                 .newBuilder()
@@ -68,10 +70,13 @@ open class MavenCentralClient(
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             when {
                 response.statusCode() == HTTP_OK -> {
-                    return json
-                        .decodeFromString<SolrSearchResponse>(response.body())
-                        .response.docs
-                        .firstOrNull()
+                    val doc =
+                        json
+                            .decodeFromString<SolrSearchResponse>(response.body())
+                            .response.docs
+                            .firstOrNull()
+                    urlCache[url] = doc
+                    return doc
                 }
 
                 response.statusCode() in RETRYABLE_CODES && attempt < MAX_RETRIES -> {
