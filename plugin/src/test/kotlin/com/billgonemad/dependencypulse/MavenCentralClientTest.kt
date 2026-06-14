@@ -68,13 +68,55 @@ class MavenCentralClientTest {
         }
     }
 
-    @Test fun `throws IOException on non-200 response`() {
-        server.enqueue(MockResponse().setResponseCode(429))
+    @Test fun `throws IOException immediately on non-retryable 4xx response`() {
+        server.enqueue(MockResponse().setResponseCode(403))
 
         val ex =
             assertFailsWith<IOException> {
                 client.fetchSignals("org.slf4j", "slf4j-api")
             }
-        assertTrue(ex.message?.contains("429") == true)
+        assertTrue(ex.message?.contains("403") == true)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `throws IOException after exhausting all retries on persistent 429`() {
+        repeat(4) {
+            server.enqueue(MockResponse().setResponseCode(429))
+        }
+
+        assertFailsWith<IOException> {
+            client.fetchSignals("org.slf4j", "slf4j-api")
+        }
+
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test fun `retries once on 429 and returns result on subsequent 200`() {
+        server.enqueue(MockResponse().setResponseCode(429))
+        server.enqueue(
+            MockResponse().setBody(
+                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+            ),
+        )
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertNotNull(result)
+        assertEquals("2.0.16", result.latestVersion)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `retries on 503 and returns result on subsequent 200`() {
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(
+            MockResponse().setBody(
+                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+            ),
+        )
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertNotNull(result)
+        assertEquals(2, server.requestCount)
     }
 }
