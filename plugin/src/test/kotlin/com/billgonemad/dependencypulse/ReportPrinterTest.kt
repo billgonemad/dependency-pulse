@@ -41,7 +41,7 @@ class ReportPrinterTest {
 
     @Test fun `GREEN dep shows checkmark and Active`() {
         val now = Instant.now()
-        val depList = listOf(dep(signals = MavenSignals("1.0", now, now), status = DepStatus.GREEN))
+        val depList = listOf(dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN))
         val output = capture { ReportPrinter.print(depList, now = now) }
         assertTrue(output.contains("✅"))
         assertTrue(output.contains("Active"))
@@ -51,7 +51,7 @@ class ReportPrinterTest {
     @Test fun `YELLOW dep shows warning emoji`() {
         val refNow = Instant.now()
         val old = refNow.minus(400, ChronoUnit.DAYS)
-        val depList = listOf(dep(signals = MavenSignals("1.0", old, old), status = DepStatus.YELLOW))
+        val depList = listOf(dep(signals = MavenSignals("1.0", old), status = DepStatus.YELLOW))
         val output = capture { ReportPrinter.print(depList, now = refNow) }
         assertTrue(output.contains("⚠️"))
         assertTrue(output.contains("13 months ago"))
@@ -79,8 +79,8 @@ class ReportPrinterTest {
         val now = Instant.now()
         val deps =
             listOf(
-                dep(signals = MavenSignals("1.0", now, now), status = DepStatus.GREEN),
-                dep(signals = MavenSignals("1.0", now.minus(400, ChronoUnit.DAYS), null), status = DepStatus.YELLOW),
+                dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN),
+                dep(signals = MavenSignals("1.0", now.minus(400, ChronoUnit.DAYS)), status = DepStatus.YELLOW),
                 dep(status = DepStatus.RED),
                 dep(status = DepStatus.UNKNOWN, errorMessage = "err"),
             )

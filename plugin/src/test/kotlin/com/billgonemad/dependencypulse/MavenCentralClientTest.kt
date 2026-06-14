@@ -25,6 +25,7 @@ class MavenCentralClientTest {
             MavenCentralClient(
                 baseUrl = "http://${server.hostName}:${server.port}",
                 httpClient = HttpClient.newHttpClient(),
+                retryDelayMs = 0L,
             )
     }
 
@@ -39,18 +40,12 @@ class MavenCentralClientTest {
                 """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
             ),
         )
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"timestamp":1700000000000}]}}""",
-            ),
-        )
 
-        val result = client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
 
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
         assertNotNull(result.latestReleaseDate)
-        assertNotNull(result.currentVersionDate)
     }
 
     @Test fun `returns null when artifact not found on Central`() {
@@ -60,44 +55,86 @@ class MavenCentralClientTest {
             ),
         )
 
-        val result = client.fetchSignals("com.example", "nonexistent", "1.0")
+        val result = client.fetchSignals("com.example", "nonexistent")
 
         assertNull(result)
-    }
-
-    @Test fun `currentVersionDate is null when specific version not found`() {
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
-            ),
-        )
-        server.enqueue(
-            MockResponse().setBody(
-                """{"response":{"numFound":0,"docs":[]}}""",
-            ),
-        )
-
-        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0-SNAPSHOT")
-
-        assertNotNull(result)
-        assertNull(result.currentVersionDate)
     }
 
     @Test fun `throws when server is unreachable`() {
         server.shutdown()
 
         assertFailsWith<Exception> {
-            client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+            client.fetchSignals("org.slf4j", "slf4j-api")
         }
     }
 
-    @Test fun `throws IOException on non-200 response`() {
-        server.enqueue(MockResponse().setResponseCode(429))
+    @Test fun `throws IOException immediately on non-retryable 4xx response`() {
+        server.enqueue(MockResponse().setResponseCode(403))
 
         val ex =
             assertFailsWith<IOException> {
-                client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+                client.fetchSignals("org.slf4j", "slf4j-api")
             }
-        assertTrue(ex.message?.contains("429") == true)
+        assertTrue(ex.message?.contains("403") == true)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `throws IOException after exhausting all retries on persistent 429`() {
+        repeat(4) {
+            server.enqueue(MockResponse().setResponseCode(429))
+        }
+
+        assertFailsWith<IOException> {
+            client.fetchSignals("org.slf4j", "slf4j-api")
+        }
+
+        assertEquals(4, server.requestCount)
+    }
+
+    @Test fun `retries once on 429 and returns result on subsequent 200`() {
+        server.enqueue(MockResponse().setResponseCode(429))
+        server.enqueue(
+            MockResponse().setBody(
+                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+            ),
+        )
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertNotNull(result)
+        assertEquals("2.0.16", result.latestVersion)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `retries on 503 and returns result on subsequent 200`() {
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(
+            MockResponse().setBody(
+                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+            ),
+        )
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertNotNull(result)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `caches URL responses — server receives each URL only once per client instance`() {
+        // fetchSignals makes 1 request per artifact.
+        // Calling it twice with identical args should hit the cache on the second call.
+        // We enqueue 2 responses but expect only 1 to be consumed.
+        repeat(2) {
+            server.enqueue(
+                MockResponse().setBody(
+                    """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                ),
+            )
+        }
+
+        client.fetchSignals("org.slf4j", "slf4j-api")
+        client.fetchSignals("org.slf4j", "slf4j-api")
+
+        assertEquals(1, server.requestCount)
     }
 }

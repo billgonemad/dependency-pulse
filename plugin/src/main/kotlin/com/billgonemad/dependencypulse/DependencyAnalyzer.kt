@@ -44,7 +44,7 @@ class DependencyAnalyzer(
             .sortedWith(compareBy({ it.group }, { it.artifact }))
             .map { (group, artifact, version) ->
                 try {
-                    val signals = client.fetchSignals(group, artifact, version)
+                    val signals = client.fetchSignals(group, artifact)
                     DependencyInfo(
                         group = group,
                         artifact = artifact,

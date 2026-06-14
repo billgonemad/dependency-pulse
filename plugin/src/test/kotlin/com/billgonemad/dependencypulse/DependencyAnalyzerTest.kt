@@ -9,14 +9,13 @@ import kotlin.test.assertNotNull
 
 class DependencyAnalyzerTest {
     private val now = Instant.now()
-    private val greenSignals = MavenSignals("1.0", now, now)
+    private val greenSignals = MavenSignals("1.0", now)
 
     private fun stubClient(signals: MavenSignals?): MavenCentralClient =
         object : MavenCentralClient() {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
-                version: String,
             ) = signals
         }
 
@@ -25,7 +24,6 @@ class DependencyAnalyzerTest {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
-                version: String,
             ): MavenSignals? = error("simulated network failure")
         }
 

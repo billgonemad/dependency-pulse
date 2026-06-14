@@ -13,32 +13,43 @@ import java.time.Instant
 
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
+private const val MAX_RETRIES = 3
+private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_INTERNAL_SERVER_ERROR = 500
+private const val HTTP_BAD_GATEWAY = 502
+private const val HTTP_SERVICE_UNAVAILABLE = 503
+private const val HTTP_GATEWAY_TIMEOUT = 504
+private val RETRYABLE_CODES =
+    setOf(
+        HTTP_TOO_MANY_REQUESTS,
+        HTTP_INTERNAL_SERVER_ERROR,
+        HTTP_BAD_GATEWAY,
+        HTTP_SERVICE_UNAVAILABLE,
+        HTTP_GATEWAY_TIMEOUT,
+    )
 
 open class MavenCentralClient(
     private val baseUrl: String = "https://search.maven.org",
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val retryDelayMs: Long = 1_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val urlCache = HashMap<String, SolrDoc?>()
 
     open fun fetchSignals(
         group: String,
         artifact: String,
-        version: String,
     ): MavenSignals? {
         val g = encode(group)
         val a = encode(artifact)
-        val v = encode(version)
         val latestDoc = fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a&rows=1&wt=json")
         val latestVersion = latestDoc?.latestVersion
         val latestTimestamp = latestDoc?.timestamp
 
         return if (latestVersion != null && latestTimestamp != null) {
-            val currentDoc =
-                fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a+AND+v:$v&rows=1&core=gav&wt=json")
             MavenSignals(
                 latestVersion = latestVersion,
                 latestReleaseDate = Instant.ofEpochMilli(latestTimestamp),
-                currentVersionDate = currentDoc?.timestamp?.let { Instant.ofEpochMilli(it) },
             )
         } else {
             null
@@ -46,6 +57,7 @@ open class MavenCentralClient(
     }
 
     private fun fetchDoc(url: String): SolrDoc? {
+        if (urlCache.containsKey(url)) return urlCache[url]
         val request =
             HttpRequest
                 .newBuilder()
@@ -53,14 +65,30 @@ open class MavenCentralClient(
                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .GET()
                 .build()
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-        if (response.statusCode() != HTTP_OK) {
-            throw IOException("Maven Central returned HTTP ${response.statusCode()} for $url")
+        var attempt = 0
+        while (true) {
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            when {
+                response.statusCode() == HTTP_OK -> {
+                    val doc =
+                        json
+                            .decodeFromString<SolrSearchResponse>(response.body())
+                            .response.docs
+                            .firstOrNull()
+                    urlCache[url] = doc
+                    return doc
+                }
+
+                response.statusCode() in RETRYABLE_CODES && attempt < MAX_RETRIES -> {
+                    Thread.sleep(retryDelayMs * (1L shl attempt))
+                    attempt++
+                }
+
+                else -> {
+                    throw IOException("Maven Central returned HTTP ${response.statusCode()} for $url")
+                }
+            }
         }
-        return json
-            .decodeFromString<SolrSearchResponse>(response.body())
-            .response.docs
-            .firstOrNull()
     }
 
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")

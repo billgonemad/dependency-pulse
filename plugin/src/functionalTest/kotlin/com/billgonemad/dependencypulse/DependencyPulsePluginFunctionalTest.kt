@@ -28,22 +28,15 @@ class DependencyPulsePluginFunctionalTest {
 
     private lateinit var server: MockWebServer
 
-    private val latestVersionJson =
+    private val latestJson =
         """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}"""
-    private val currentVersionJson =
-        """{"response":{"numFound":1,"docs":[{"timestamp":1700000000000}]}}"""
 
     @BeforeEach
     fun setUp() {
         server = MockWebServer()
         server.dispatcher =
             object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse =
-                    if (request.path?.contains("core=gav") == true) {
-                        MockResponse().setBody(currentVersionJson)
-                    } else {
-                        MockResponse().setBody(latestVersionJson)
-                    }
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody(latestJson)
             }
         server.start()
     }
@@ -112,8 +105,11 @@ class DependencyPulsePluginFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
-                .buildAndFail()
+                .withArguments(
+                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DmavenCentralRetryDelayMs=0",
+                    "dependencyPulse",
+                ).buildAndFail()
 
         assertTrue(result.output.contains("❓"))
     }
@@ -125,12 +121,7 @@ class DependencyPulsePluginFunctionalTest {
 
         server.dispatcher =
             object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse =
-                    if (request.path?.contains("core=gav") == true) {
-                        MockResponse().setBody(currentVersionJson)
-                    } else {
-                        MockResponse().setBody(redJson)
-                    }
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody(redJson)
             }
 
         settingsFile.writeText("rootProject.name = 'test-project'")

@@ -7,10 +7,8 @@
  */
 
 plugins {
-    // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
     `java-gradle-plugin`
-
-    // Apply JaCoCo for code coverage reporting and verification.
+    `maven-publish`
     `jacoco`
 
     // Apply the Kotlin JVM plugin to add support for Kotlin.
@@ -29,8 +27,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+version = "0.2.0-SNAPSHOT"
+
 repositories {
-    // Use Maven Central for resolving dependencies.
     mavenCentral()
 }
 
