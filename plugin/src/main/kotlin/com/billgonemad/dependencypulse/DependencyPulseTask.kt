@@ -7,7 +7,9 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.DisableCachingByDefault
 
+@DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
     @get:Input
     abstract val failOnRed: Property<Boolean>
@@ -28,12 +30,15 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val mavenCentralBaseUrl: Property<String>
 
     @get:Input
+    abstract val retryDelayMs: Property<Long>
+
+    @get:Input
     @get:Optional
     abstract val githubToken: Property<String>
 
     @TaskAction
     fun run() {
-        val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get())
+        val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get(), retryDelayMs = retryDelayMs.get())
         val analyzer = DependencyAnalyzer(client)
         val results =
             analyzer.analyze(

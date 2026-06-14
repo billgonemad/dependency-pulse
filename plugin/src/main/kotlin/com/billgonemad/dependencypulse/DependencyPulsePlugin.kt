@@ -3,6 +3,8 @@ package com.billgonemad.dependencypulse
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 
+private const val DEFAULT_RETRY_DELAY_MS = 1_000L
+
 class DependencyPulsePlugin : Plugin<Project> {
     override fun apply(project: Project) {
         val ext = project.extensions.create("dependencyPulse", DependencyPulseExtension::class.java)
@@ -25,6 +27,12 @@ class DependencyPulsePlugin : Plugin<Project> {
                 project.providers
                     .systemProperty("mavenCentralBaseUrl")
                     .orElse("https://search.maven.org"),
+            )
+            task.retryDelayMs.set(
+                project.providers
+                    .systemProperty("mavenCentralRetryDelayMs")
+                    .map { it.toLong() }
+                    .orElse(DEFAULT_RETRY_DELAY_MS),
             )
             task.failOnRed.set(ext.failOnRed)
             task.failOnError.set(ext.failOnError)
