@@ -17,6 +17,7 @@ private const val HTTP_OK = 200
 open class MavenCentralClient(
     private val baseUrl: String = "https://search.maven.org",
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val retryDelayMs: Long = 1_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 

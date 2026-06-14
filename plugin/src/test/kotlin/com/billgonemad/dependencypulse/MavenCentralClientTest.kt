@@ -25,6 +25,7 @@ class MavenCentralClientTest {
             MavenCentralClient(
                 baseUrl = "http://${server.hostName}:${server.port}",
                 httpClient = HttpClient.newHttpClient(),
+                retryDelayMs = 0L,
             )
     }
 
