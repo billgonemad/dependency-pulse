@@ -14,7 +14,19 @@ import java.time.Instant
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
 private const val MAX_RETRIES = 3
-private val RETRYABLE_CODES = setOf(429, 500, 502, 503, 504)
+private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_INTERNAL_SERVER_ERROR = 500
+private const val HTTP_BAD_GATEWAY = 502
+private const val HTTP_SERVICE_UNAVAILABLE = 503
+private const val HTTP_GATEWAY_TIMEOUT = 504
+private val RETRYABLE_CODES =
+    setOf(
+        HTTP_TOO_MANY_REQUESTS,
+        HTTP_INTERNAL_SERVER_ERROR,
+        HTTP_BAD_GATEWAY,
+        HTTP_SERVICE_UNAVAILABLE,
+        HTTP_GATEWAY_TIMEOUT,
+    )
 
 open class MavenCentralClient(
     private val baseUrl: String = "https://search.maven.org",
@@ -55,17 +67,21 @@ open class MavenCentralClient(
         while (true) {
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             when {
-                response.statusCode() == HTTP_OK ->
+                response.statusCode() == HTTP_OK -> {
                     return json
                         .decodeFromString<SolrSearchResponse>(response.body())
                         .response.docs
                         .firstOrNull()
+                }
+
                 response.statusCode() in RETRYABLE_CODES && attempt < MAX_RETRIES -> {
                     Thread.sleep(retryDelayMs * (1L shl attempt))
                     attempt++
                 }
-                else ->
+
+                else -> {
                     throw IOException("Maven Central returned HTTP ${response.statusCode()} for $url")
+                }
             }
         }
     }
