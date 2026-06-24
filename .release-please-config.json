@@ -1,0 +1,15 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "java",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "gradle.properties",
+          "search-by-line": true
+        }
+      ]
+    }
+  }
+}
