@@ -1,6 +1,7 @@
 # dependency-pulse
 
 [![CI](https://github.com/billgonemad/dependency-pulse/actions/workflows/ci.yml/badge.svg)](https://github.com/billgonemad/dependency-pulse/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/billgonemad/dependency-pulse)](https://github.com/billgonemad/dependency-pulse/releases)
 
 A Gradle plugin that checks how stale your JVM dependencies are.
 It queries Maven Central for each dependency's latest release date and
@@ -32,30 +33,60 @@ Dependency Pulse Report
 
 ## Installation
 
-The plugin is not yet published to the Gradle Plugin Portal. Build and publish it locally first:
+The plugin is published to [GitHub Packages](https://github.com/billgonemad/dependency-pulse/packages).
+You need a GitHub token with `read:packages` scope — either `GITHUB_TOKEN` in CI or a
+[personal access token](https://github.com/settings/tokens) locally.
 
-```bash
-./gradlew :plugin:publishToMavenLocal
-```
-
-Then in your project's `settings.gradle.kts`, add the local Maven repository to the plugin resolution:
-
-```kotlin
+**`settings.gradle` (Groovy)**
+```groovy
 pluginManagement {
     repositories {
-        mavenLocal()
+        maven {
+            url = uri("https://maven.pkg.github.com/billgonemad/dependency-pulse")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: findProperty("gpr.user")
+                password = System.getenv("GITHUB_TOKEN") ?: findProperty("gpr.key")
+            }
+        }
         gradlePluginPortal()
     }
 }
 ```
 
-And apply the plugin in your `build.gradle.kts`:
-
+**`settings.gradle.kts` (Kotlin)**
 ```kotlin
-plugins {
-    id("com.billgonemad.dependency-pulse") version "0.2.0-SNAPSHOT"
+pluginManagement {
+    repositories {
+        maven {
+            url = uri("https://maven.pkg.github.com/billgonemad/dependency-pulse")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR") ?: providers.gradleProperty("gpr.user").orNull
+                password = System.getenv("GITHUB_TOKEN") ?: providers.gradleProperty("gpr.key").orNull
+            }
+        }
+        gradlePluginPortal()
+    }
 }
 ```
+
+Then apply the plugin:
+
+**`build.gradle` (Groovy)**
+```groovy
+plugins {
+    id 'com.billgonemad.dependency-pulse' version '0.1.0'
+}
+```
+
+**`build.gradle.kts` (Kotlin)**
+```kotlin
+plugins {
+    id("com.billgonemad.dependency-pulse") version "0.1.0"
+}
+```
+
+> Publishing to the Gradle Plugin Portal is planned — once on the Portal, no repository
+> configuration or credentials will be required.
 
 ## Configuration
 
