@@ -8,7 +8,6 @@
 
 plugins {
     `java-gradle-plugin`
-    `maven-publish`
     `jacoco`
 
     // Apply the Kotlin JVM plugin to add support for Kotlin.
@@ -25,9 +24,13 @@ plugins {
 
     // Apply Kotlin serialization plugin (same version as the compiler).
     alias(libs.plugins.kotlin.serialization)
+
+    // Apply Gradle Plugin Portal publishing (also applies maven-publish transitively).
+    alias(libs.plugins.plugin.publish)
 }
 
-version = "0.2.0-SNAPSHOT"
+group = "com.billgonemad"
+version = property("version") as String
 
 repositories {
     mavenCentral()
@@ -76,9 +79,14 @@ testing {
 }
 
 gradlePlugin {
+    website = "https://github.com/billgonemad/dependency-pulse"
+    vcsUrl = "https://github.com/billgonemad/dependency-pulse"
     val dependencyPulse by plugins.creating {
         id = "com.billgonemad.dependency-pulse"
         implementationClass = "com.billgonemad.dependencypulse.DependencyPulsePlugin"
+        displayName = "Dependency Pulse"
+        description = "Detects abandoned or stale JVM dependencies"
+        tags = listOf("dependencies", "jvm", "maintenance")
     }
 }
 
