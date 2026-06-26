@@ -37,11 +37,11 @@ class MavenCentralClientTest {
     @Test fun `returns MavenSignals when artifact found`() {
         server.enqueue(
             MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                """{"response":{"docs":[{"v":"2.0.16","timestamp":1722729600000}]}}""",
             ),
         )
 
-        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
@@ -51,11 +51,11 @@ class MavenCentralClientTest {
     @Test fun `returns null when artifact not found on Central`() {
         server.enqueue(
             MockResponse().setBody(
-                """{"response":{"numFound":0,"docs":[]}}""",
+                """{"response":{"docs":[]}}""",
             ),
         )
 
-        val result = client.fetchSignals("com.example", "nonexistent")
+        val result = client.fetchSignals("com.example", "nonexistent", "1.0.0")
 
         assertNull(result)
     }
@@ -64,7 +64,7 @@ class MavenCentralClientTest {
         server.shutdown()
 
         assertFailsWith<Exception> {
-            client.fetchSignals("org.slf4j", "slf4j-api")
+            client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
         }
     }
 
@@ -73,7 +73,7 @@ class MavenCentralClientTest {
 
         val ex =
             assertFailsWith<IOException> {
-                client.fetchSignals("org.slf4j", "slf4j-api")
+                client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
             }
         assertTrue(ex.message?.contains("403") == true)
         assertEquals(1, server.requestCount)
@@ -85,7 +85,7 @@ class MavenCentralClientTest {
         }
 
         assertFailsWith<IOException> {
-            client.fetchSignals("org.slf4j", "slf4j-api")
+            client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
         }
 
         assertEquals(4, server.requestCount)
@@ -95,11 +95,11 @@ class MavenCentralClientTest {
         server.enqueue(MockResponse().setResponseCode(429))
         server.enqueue(
             MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                """{"response":{"docs":[{"v":"2.0.16","timestamp":1722729600000}]}}""",
             ),
         )
 
-        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
@@ -110,11 +110,11 @@ class MavenCentralClientTest {
         server.enqueue(MockResponse().setResponseCode(503))
         server.enqueue(
             MockResponse().setBody(
-                """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                """{"response":{"docs":[{"v":"2.0.16","timestamp":1722729600000}]}}""",
             ),
         )
 
-        val result = client.fetchSignals("org.slf4j", "slf4j-api")
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNotNull(result)
         assertEquals(2, server.requestCount)
@@ -127,14 +127,31 @@ class MavenCentralClientTest {
         repeat(2) {
             server.enqueue(
                 MockResponse().setBody(
-                    """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}""",
+                    """{"response":{"docs":[{"v":"2.0.16","timestamp":1722729600000}]}}""",
                 ),
             )
         }
 
-        client.fetchSignals("org.slf4j", "slf4j-api")
-        client.fetchSignals("org.slf4j", "slf4j-api")
+        client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+        client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `selects latest stable from a mixed version list`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"response":{"docs":[
+                    {"v":"5.0.0-alpha.16","timestamp":1748476800000},
+                    {"v":"4.12.0","timestamp":1697500800000},
+                    {"v":"4.11.0","timestamp":1682208000000}
+                ]}}""",
+            ),
+        )
+
+        val result = client.fetchSignals("com.squareup.okhttp3", "okhttp", "4.12.0")
+
+        assertNotNull(result)
+        assertEquals("4.12.0", result.latestVersion)
     }
 }
