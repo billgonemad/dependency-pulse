@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.billgonemad.dependencypulse
 
 data class VersionEntry(
@@ -32,9 +34,11 @@ fun isPreRelease(version: String): Boolean =
 fun selectLatest(
     versions: List<VersionEntry>,
     currentVersion: String,
-): VersionEntry? {
-    val newestOverall = versions.maxByOrNull { it.timestamp } ?: return null
-    if (isPreRelease(currentVersion)) return newestOverall
-    val newestStable = versions.filterNot { isPreRelease(it.version) }.maxByOrNull { it.timestamp }
-    return newestStable ?: newestOverall
-}
+): VersionEntry? =
+    versions.maxByOrNull { it.timestamp }?.let { newestOverall ->
+        if (isPreRelease(currentVersion)) {
+            newestOverall
+        } else {
+            versions.filterNot { isPreRelease(it.version) }.maxByOrNull { it.timestamp } ?: newestOverall
+        }
+    }
