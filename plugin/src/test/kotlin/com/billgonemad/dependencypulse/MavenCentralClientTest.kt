@@ -117,6 +117,7 @@ class MavenCentralClientTest {
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNotNull(result)
+        assertEquals("2.0.16", result.latestVersion)
         assertEquals(2, server.requestCount)
     }
 
@@ -133,7 +134,7 @@ class MavenCentralClientTest {
         }
 
         client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
-        client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+        client.fetchSignals("org.slf4j", "slf4j-api", "2.0.0")
 
         assertEquals(1, server.requestCount)
     }

@@ -55,7 +55,7 @@ class VersionSelectorTest {
                 VersionEntry("1.0.0-alpha.2", 200L),
                 VersionEntry("1.0.0-alpha.1", 100L),
             )
-        assertEquals("1.0.0-alpha.2", selectLatest(versions, "1.0.0-alpha.1")?.version)
+        assertEquals("1.0.0-alpha.2", selectLatest(versions, "1.0.0")?.version)
     }
 
     @Test fun `returns null for empty version list`() {
