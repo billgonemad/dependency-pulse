@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/billgonemad/dependency-pulse/compare/v0.1.0...v0.2.0) (2026-06-27)
+
+
+### Features
+
+* add VersionSelector for stable-version selection ([9c3cd5e](https://github.com/billgonemad/dependency-pulse/commit/9c3cd5e6051140a2c93b2b593503679f7c8ac055))
+* enumerate versions via core=gav and select latest stable ([0065075](https://github.com/billgonemad/dependency-pulse/commit/0065075c4f498ec4a6ce8e7af74b3df891a4aa6d))
+* pass consumer version to Maven Central lookup ([f44d3da](https://github.com/billgonemad/dependency-pulse/commit/f44d3dad2989a48d67656f8dec6bcaa24297af7c))
+
+
+### Bug Fixes
+
+* select latest stable version, ignoring pre-releases ([#4](https://github.com/billgonemad/dependency-pulse/issues/4)) ([b55376c](https://github.com/billgonemad/dependency-pulse/commit/b55376c05ffdd46b293f7e219beedefad434bff2))
+
 ## [0.1.0](https://github.com/billgonemad/dependency-pulse/compare/v0.0.0...v0.1.0) (2026-06-24)
 
 
