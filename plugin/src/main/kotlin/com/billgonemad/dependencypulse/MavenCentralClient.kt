@@ -14,6 +14,11 @@ import java.time.Instant
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
 private const val MAX_RETRIES = 3
+
+// Versions fetched per artifact (newest first). Must exceed the number of
+// pre-releases published more recently than the latest stable, otherwise that
+// stable falls outside the window and selectLatest falls back to a pre-release.
+private const val VERSION_FETCH_LIMIT = 100
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_INTERNAL_SERVER_ERROR = 500
 private const val HTTP_BAD_GATEWAY = 502
@@ -34,30 +39,27 @@ open class MavenCentralClient(
     private val retryDelayMs: Long = 1_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
-    private val urlCache = HashMap<String, SolrDoc?>()
+    private val urlCache = HashMap<String, List<VersionEntry>>()
 
     open fun fetchSignals(
         group: String,
         artifact: String,
+        currentVersion: String,
     ): MavenSignals? {
         val g = encode(group)
         val a = encode(artifact)
-        val latestDoc = fetchDoc("$baseUrl/solrsearch/select?q=g:$g+AND+a:$a&rows=1&wt=json")
-        val latestVersion = latestDoc?.latestVersion
-        val latestTimestamp = latestDoc?.timestamp
-
-        return if (latestVersion != null && latestTimestamp != null) {
-            MavenSignals(
-                latestVersion = latestVersion,
-                latestReleaseDate = Instant.ofEpochMilli(latestTimestamp),
-            )
-        } else {
-            null
-        }
+        val url =
+            "$baseUrl/solrsearch/select?q=g:$g+AND+a:$a" +
+                "&core=gav&rows=$VERSION_FETCH_LIMIT&sort=timestamp+desc&wt=json"
+        val selected = selectLatest(fetchVersions(url), currentVersion) ?: return null
+        return MavenSignals(
+            latestVersion = selected.version,
+            latestReleaseDate = Instant.ofEpochMilli(selected.timestamp),
+        )
     }
 
-    private fun fetchDoc(url: String): SolrDoc? {
-        if (urlCache.containsKey(url)) return urlCache[url]
+    private fun fetchVersions(url: String): List<VersionEntry> {
+        urlCache[url]?.let { return it }
         val request =
             HttpRequest
                 .newBuilder()
@@ -70,13 +72,13 @@ open class MavenCentralClient(
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             when {
                 response.statusCode() == HTTP_OK -> {
-                    val doc =
+                    val versions =
                         json
                             .decodeFromString<SolrSearchResponse>(response.body())
                             .response.docs
-                            .firstOrNull()
-                    urlCache[url] = doc
-                    return doc
+                            .mapNotNull { it.toVersionEntry() }
+                    urlCache[url] = versions
+                    return versions
                 }
 
                 response.statusCode() in RETRYABLE_CODES && attempt < MAX_RETRIES -> {
@@ -106,6 +108,8 @@ private data class SolrResponseBody(
 
 @Serializable
 private data class SolrDoc(
-    val latestVersion: String? = null,
+    val v: String? = null,
     val timestamp: Long? = null,
-)
+) {
+    fun toVersionEntry(): VersionEntry? = if (v != null && timestamp != null) VersionEntry(v, timestamp) else null
+}

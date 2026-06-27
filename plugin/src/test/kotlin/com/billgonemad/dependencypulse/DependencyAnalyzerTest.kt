@@ -16,6 +16,7 @@ class DependencyAnalyzerTest {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
+                currentVersion: String,
             ) = signals
         }
 
@@ -24,6 +25,7 @@ class DependencyAnalyzerTest {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
+                currentVersion: String,
             ): MavenSignals? = error("simulated network failure")
         }
 
