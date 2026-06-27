@@ -195,6 +195,10 @@ dependencyCheck {
     }
     nvd {
         apiKey = System.getenv("NVD_API_KEY") ?: ""
+        // Treat a downloaded NVD dataset as fresh for 24h (default is 4h). Combined
+        // with the cached data directory in CI, this skips the NVD API entirely when
+        // recent data is present, so a transient NVD outage can't fail the build.
+        validForHours = 24
     }
 }
 
