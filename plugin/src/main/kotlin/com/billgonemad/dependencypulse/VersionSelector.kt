@@ -2,7 +2,7 @@
 
 package com.billgonemad.dependencypulse
 
-data class VersionEntry(
+internal data class VersionEntry(
     val version: String,
     val timestamp: Long,
 )
@@ -19,7 +19,7 @@ private val TRAILING_DIGITS = Regex("\\d+$")
  * `rc2` -> `rc`). Plain numeric tokens never match, so `4.12.0`,
  * `1.0.0.RELEASE`, and `2.0-Final` are stable.
  */
-fun isPreRelease(version: String): Boolean =
+internal fun isPreRelease(version: String): Boolean =
     version.split(TOKEN_DELIMITERS).any { token ->
         TRAILING_DIGITS.replaceFirst(token, "").lowercase() in PRE_RELEASE_QUALIFIERS
     }
@@ -31,7 +31,7 @@ fun isPreRelease(version: String): Boolean =
  *   when no stable version exists.
  * Newest is by [VersionEntry.timestamp]. Returns null for an empty list.
  */
-fun selectLatest(
+internal fun selectLatest(
     versions: List<VersionEntry>,
     currentVersion: String,
 ): VersionEntry? =

@@ -14,6 +14,10 @@ import java.time.Instant
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
 private const val MAX_RETRIES = 3
+
+// Versions fetched per artifact (newest first). Must exceed the number of
+// pre-releases published more recently than the latest stable, otherwise that
+// stable falls outside the window and selectLatest falls back to a pre-release.
 private const val VERSION_FETCH_LIMIT = 100
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_INTERNAL_SERVER_ERROR = 500
