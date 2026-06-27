@@ -23,12 +23,45 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # The OWASP plugin downloads the full NVD CVE database before analyzing.
+      # Cache it across runs so we don't re-download (~hundreds of MB, very slow)
+      # every time and so a transient NVD outage falls back to existing data.
+      # A date-stamped key snapshots fresh data daily; restore-keys falls back to
+      # the most recent prior snapshot for incremental updates.
+      - name: Compute NVD cache date
+        id: nvd-date
+        run: echo "yyyymmdd=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+
+      # Restore only: the matching save step below runs solely on success, so a
+      # corrupted/truncated H2 store from a failed run is never cached and the
+      # next run starts fresh (self-healing) rather than restoring the bad copy.
+      - name: Restore NVD database
+        id: nvd-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-data-${{ runner.os }}-${{ steps.nvd-date.outputs.yyyymmdd }}
+          restore-keys: |
+            nvd-data-${{ runner.os }}-
+
+      # --no-configuration-cache: the OWASP Analyze task accesses Task.project at
+      # execution time and isn't compatible with Gradle's configuration cache
+      # (enabled project-wide). It can't use the cache anyway, so opt out cleanly.
       - name: OWASP Dependency Check
-        run: ./gradlew :plugin:dependencyCheckAnalyze --stacktrace
+        run: ./gradlew :plugin:dependencyCheckAnalyze --no-configuration-cache --stacktrace
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
           OSSINDEX_USERNAME: ${{ secrets.OSSINDEX_USERNAME }}
           OSSINDEX_APITOKEN: ${{ secrets.OSSINDEX_APITOKEN }}
+
+      # Save the NVD database only on success and only when today's snapshot
+      # isn't already cached, so we never persist a DB from a failed scan.
+      - name: Save NVD database
+        if: success() && steps.nvd-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.gradle/dependency-check-data
+          key: nvd-data-${{ runner.os }}-${{ steps.nvd-date.outputs.yyyymmdd }}
 
       - name: Upload report
         if: always()
