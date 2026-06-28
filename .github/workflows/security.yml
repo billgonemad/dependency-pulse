@@ -37,7 +37,7 @@ jobs:
       # next run starts fresh (self-healing) rather than restoring the bad copy.
       - name: Restore NVD database
         id: nvd-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: ~/.gradle/dependency-check-data
           key: nvd-data-${{ runner.os }}-${{ steps.nvd-date.outputs.yyyymmdd }}
@@ -58,7 +58,7 @@ jobs:
       # isn't already cached, so we never persist a DB from a failed scan.
       - name: Save NVD database
         if: success() && steps.nvd-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ~/.gradle/dependency-check-data
           key: nvd-data-${{ runner.os }}-${{ steps.nvd-date.outputs.yyyymmdd }}
