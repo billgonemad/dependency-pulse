@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Surface Gradle dependency bumps in release notes: the "deps" type maps to
+    # release-please's visible Dependencies section. The GitHub Actions updates
+    # below keep dependabot's default "build(deps)" prefix (hidden) — pure CI
+    # tooling that consumers don't care about.
+    commit-message:
+      prefix: "deps"
     groups:
       gradle-minor-patch:
         update-types:
