@@ -6,8 +6,7 @@
       "extra-files": [
         {
           "type": "generic",
-          "path": "gradle.properties",
-          "search-by-line": true
+          "path": "gradle.properties"
         }
       ]
     }
