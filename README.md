@@ -72,22 +72,22 @@ pluginManagement {
 Then apply the plugin:
 
 **`build.gradle` (Groovy)**
+<!-- x-release-please-start-version -->
 ```groovy
 plugins {
-    // x-release-please-start-version
     id 'com.billgonemad.dependency-pulse' version '0.3.0'
-    // x-release-please-end-version
 }
 ```
+<!-- x-release-please-end-version -->
 
 **`build.gradle.kts` (Kotlin)**
+<!-- x-release-please-start-version -->
 ```kotlin
 plugins {
-    // x-release-please-start-version
     id("com.billgonemad.dependency-pulse") version "0.3.0"
-    // x-release-please-end-version
 }
 ```
+<!-- x-release-please-end-version -->
 
 > Publishing to the Gradle Plugin Portal is planned — once on the Portal, no repository
 > configuration or credentials will be required.
