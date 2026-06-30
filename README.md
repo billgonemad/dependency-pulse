@@ -75,7 +75,7 @@ Then apply the plugin:
 ```groovy
 plugins {
     // x-release-please-start-version
-    id 'com.billgonemad.dependency-pulse' version '0.2.0'
+    id 'com.billgonemad.dependency-pulse' version '0.3.0'
     // x-release-please-end-version
 }
 ```
@@ -84,7 +84,7 @@ plugins {
 ```kotlin
 plugins {
     // x-release-please-start-version
-    id("com.billgonemad.dependency-pulse") version "0.2.0"
+    id("com.billgonemad.dependency-pulse") version "0.3.0"
     // x-release-please-end-version
 }
 ```
