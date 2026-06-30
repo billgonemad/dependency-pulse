@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/billgonemad/dependency-pulse/compare/v0.2.0...v0.3.0) (2026-06-30)
+
+
+### Features
+
+* **plugin:** add runOnCheck flag to wire dependencyPulse into check ([827f290](https://github.com/billgonemad/dependency-pulse/commit/827f290b0537efb99c7e2e72b73c9dac90adaa95))
+
 ## [0.2.0](https://github.com/billgonemad/dependency-pulse/compare/v0.1.0...v0.2.0) (2026-06-27)
 
 
