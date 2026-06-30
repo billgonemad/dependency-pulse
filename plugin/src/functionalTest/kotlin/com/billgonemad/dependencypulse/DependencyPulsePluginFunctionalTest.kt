@@ -114,6 +114,66 @@ class DependencyPulsePluginFunctionalTest {
         assertTrue(result.output.contains("❓"))
     }
 
+    @Test fun `runOnCheck=true wires dependencyPulse into the check lifecycle task`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                runOnCheck = true
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "check")
+                .build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+    }
+
+    @Test fun `runOnCheck=false does not wire dependencyPulse into the check lifecycle task`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                runOnCheck = false
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "check")
+                .build()
+
+        assertEquals(null, result.task(":dependencyPulse")?.outcome)
+    }
+
     @Test fun `failOnRed causes build failure when latest release is stale`() {
         val threeYearsAgo = System.currentTimeMillis() - THREE_YEARS_MS
         val redJson =
