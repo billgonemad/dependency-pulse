@@ -74,14 +74,18 @@ Then apply the plugin:
 **`build.gradle` (Groovy)**
 ```groovy
 plugins {
-    id 'com.billgonemad.dependency-pulse' version '0.1.0'
+    // x-release-please-start-version
+    id 'com.billgonemad.dependency-pulse' version '0.2.0'
+    // x-release-please-end-version
 }
 ```
 
 **`build.gradle.kts` (Kotlin)**
 ```kotlin
 plugins {
-    id("com.billgonemad.dependency-pulse") version "0.1.0"
+    // x-release-please-start-version
+    id("com.billgonemad.dependency-pulse") version "0.2.0"
+    // x-release-please-end-version
 }
 ```
 
@@ -94,6 +98,7 @@ plugins {
 dependencyPulse {
     failOnRed = false          // fail the build if any RED dependency is found
     failOnError = false        // fail the build if Maven Central is unreachable
+    runOnCheck = false         // attach dependencyPulse to the check lifecycle task
     ignoreConfigurations = listOf(
         "testImplementation",
         "testRuntimeOnly",
@@ -114,6 +119,19 @@ Run the task with:
 ```bash
 ./gradlew dependencyPulse
 ```
+
+### Failing CI on abandoned dependencies
+
+To gate your CI pipeline on dependency health, combine `runOnCheck` with `failOnRed`:
+
+```kotlin
+dependencyPulse {
+    runOnCheck = true   // run automatically with ./gradlew check
+    failOnRed = true    // fail the build if any dependency is RED (abandoned)
+}
+```
+
+`runOnCheck` controls whether the task runs during `check`. `failOnRed` controls whether a stale dependency actually breaks the build. Both must be `true` to gate CI.
 
 ## How it works
 

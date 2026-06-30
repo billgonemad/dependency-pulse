@@ -11,6 +11,7 @@ class DependencyPulsePlugin : Plugin<Project> {
 
         ext.failOnRed.convention(false)
         ext.failOnError.convention(false)
+        ext.runOnCheck.convention(false)
         ext.ignoreConfigurations.convention(
             listOf(
                 "testImplementation",
@@ -40,6 +41,14 @@ class DependencyPulsePlugin : Plugin<Project> {
             task.yellowAfterMonths.set(ext.thresholds.yellowAfterMonths)
             task.redAfterMonths.set(ext.thresholds.redAfterMonths)
             task.githubToken.set(ext.githubToken)
+        }
+
+        project.afterEvaluate {
+            if (ext.runOnCheck.get() && project.tasks.findByName("check") != null) {
+                project.tasks.named("check") {
+                    it.dependsOn("dependencyPulse")
+                }
+            }
         }
     }
 }
