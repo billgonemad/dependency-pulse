@@ -186,6 +186,9 @@ tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
 // Without the key the scan works but the initial NVD database download is slow.
 dependencyCheck {
     failBuildOnCVSS = 7.0f
+    // Time-boxed suppressions (each entry documents its CVE + an `until` expiry so
+    // suppressed findings re-surface if not removed). See the file for rationale.
+    suppressionFile = file("dependency-check-suppression.xml").toString()
     analyzers {
         assemblyEnabled = false // not a .NET project
         ossIndex {

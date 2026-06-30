@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+      CVE-2026-53914 — unsafe deserialization in the Kotlin build-cache metadata
+      (CWE-502; CVSS:3.1 AV:L/AC:H/PR:H, i.e. local access + high privileges).
+
+      Why suppressed:
+        - The vulnerability lives in the Kotlin compiler/build toolchain, not in
+          kotlin-stdlib. OWASP's `cpe:2.3:a:jetbrains:kotlin` match flags EVERY
+          Kotlin artifact, including the kotlin-stdlib this plugin actually ships
+          — a false positive for our runtime attack surface.
+        - Fixed upstream in Kotlin 2.4.20, which has NO stable release as of
+          2026-06-29 (only 2.4.20-Beta1 / 2.4.10-RC exist). There is no stable
+          version we can upgrade to that clears the finding, so we cannot remediate
+          by version bump yet.
+
+      Tracking: issue #42 — bump Kotlin to 2.4.20 and delete this suppression once
+      2.4.20 ships stable. The `until` date forces this finding to re-surface if
+      forgotten.
+    -->
+    <suppress until="2026-08-31Z">
+        <notes><![CDATA[
+        Kotlin compiler build-cache deserialization (CWE-502). CPE false-positive
+        against shipped kotlin-stdlib; no stable fixed release (2.4.20) available
+        as of 2026-06-29. Remove after upgrading to Kotlin 2.4.20 stable.
+        ]]></notes>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+</suppressions>
