@@ -50,16 +50,18 @@ open class PomClient(
         version: String,
     ): String? {
         val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        val request =
-            HttpRequest
-                .newBuilder()
-                .uri(URI.create("$baseUrl/$path"))
-                .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-                .GET()
-                .build()
         return try {
+            val request =
+                HttpRequest
+                    .newBuilder()
+                    .uri(URI.create("$baseUrl/$path"))
+                    .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                    .GET()
+                    .build()
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             if (response.statusCode() == HTTP_OK) response.body() else null
+        } catch (ignored: IllegalArgumentException) {
+            null
         } catch (ignored: IOException) {
             null
         } catch (ignored: InterruptedException) {

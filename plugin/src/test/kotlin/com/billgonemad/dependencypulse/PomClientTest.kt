@@ -167,6 +167,10 @@ class PomClientTest {
         assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
     }
 
+    @Test fun `returns null when a coordinate produces an invalid uri`() {
+        assertNull(client.fetchGitHubRepo("g", "artifact with spaces", "1.0"))
+    }
+
     @Test fun `returns null for malformed xml`() {
         server.enqueue(MockResponse().setBody("not valid xml <<<"))
 
