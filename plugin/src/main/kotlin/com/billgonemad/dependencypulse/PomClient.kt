@@ -1,6 +1,6 @@
 package com.billgonemad.dependencypulse
 
-private val GITHUB_URL_PATTERN = Regex("""github\.com[/:]+([\w.-]+)/([\w.-]+)""")
+private val GITHUB_URL_PATTERN = Regex("""(?<![\w-])github\.com[/:]+([\w.-]+)/([\w.-]+)""")
 
 internal fun normalizeGitHubUrl(rawUrl: String?): String? {
     val match = rawUrl?.let { GITHUB_URL_PATTERN.find(it) } ?: return null

@@ -29,6 +29,10 @@ class PomClientTest {
         assertNull(normalizeGitHubUrl("https://gitlab.com/owner/repo"))
     }
 
+    @Test fun `returns null for a host that merely contains github-dot-com as a substring`() {
+        assertNull(normalizeGitHubUrl("https://not-github.com/owner/repo"))
+    }
+
     @Test fun `returns null for a null input`() {
         assertNull(normalizeGitHubUrl(null))
     }
