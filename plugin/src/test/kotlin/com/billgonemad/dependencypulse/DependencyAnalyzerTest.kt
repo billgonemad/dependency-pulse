@@ -6,6 +6,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class DependencyAnalyzerTest {
     private val now = Instant.now()
@@ -29,12 +30,28 @@ class DependencyAnalyzerTest {
             ): MavenSignals? = error("simulated network failure")
         }
 
+    private fun stubPomClient(repo: String? = null): PomClient =
+        object : PomClient() {
+            override fun fetchGitHubRepo(
+                group: String,
+                artifact: String,
+                version: String,
+            ) = repo
+        }
+
+    private fun stubGithubClient(signals: GitHubSignals? = null): GitHubClient =
+        object : GitHubClient() {
+            override fun fetchSignals(ownerRepo: String) = signals
+        }
+
     private fun analyzerWith(
         signals: MavenSignals?,
         coords: Set<Coords>,
+        pomClient: PomClient = stubPomClient(),
+        githubClient: GitHubClient = stubGithubClient(),
     ): DependencyAnalyzer {
         val resolver = { _: Project, _: List<String> -> coords }
-        return DependencyAnalyzer(stubClient(signals), resolver)
+        return DependencyAnalyzer(stubClient(signals), pomClient, githubClient, resolver)
     }
 
     @Test fun `deduplicates coordinates across configurations`() {
@@ -56,7 +73,7 @@ class DependencyAnalyzerTest {
             capturedIgnore = ignore
             emptySet<Coords>()
         }
-        val analyzer = DependencyAnalyzer(stubClient(greenSignals), resolver)
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), stubPomClient(), stubGithubClient(), resolver)
 
         analyzer.analyze(ProjectBuilder.builder().build(), listOf("testImplementation"), 12, 24)
 
@@ -75,7 +92,7 @@ class DependencyAnalyzerTest {
         val resolver = { _: Project, _: List<String> ->
             setOf(Coords("org.example", "bad", "1.0"))
         }
-        val analyzer = DependencyAnalyzer(throwingClient(), resolver)
+        val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient(), stubGithubClient(), resolver)
 
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
 
@@ -89,5 +106,52 @@ class DependencyAnalyzerTest {
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
 
         assertEquals(DepStatus.GREEN, results[0].status)
+    }
+
+    @Test fun `populates githubSignals when the dependency has a resolvable GitHub repo`() {
+        val githubSignals = GitHubSignals(now, isArchived = false)
+        val analyzer =
+            analyzerWith(
+                greenSignals,
+                setOf(Coords("org.example", "hosted", "1.0")),
+                pomClient = stubPomClient("org/hosted"),
+                githubClient = stubGithubClient(githubSignals),
+            )
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+
+        assertEquals(githubSignals, results[0].githubSignals)
+    }
+
+    @Test fun `leaves githubSignals null when no GitHub repo can be resolved from the POM`() {
+        val analyzer =
+            analyzerWith(
+                greenSignals,
+                setOf(Coords("org.example", "unhosted", "1.0")),
+                pomClient = stubPomClient(null),
+            )
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+
+        assertNull(results[0].githubSignals)
+    }
+
+    @Test fun `still populates githubSignals when the Maven Central lookup throws`() {
+        val githubSignals = GitHubSignals(now, isArchived = true)
+        val resolver = { _: Project, _: List<String> ->
+            setOf(Coords("org.example", "bad", "1.0"))
+        }
+        val analyzer =
+            DependencyAnalyzer(
+                throwingClient(),
+                stubPomClient("org/bad"),
+                stubGithubClient(githubSignals),
+                resolver,
+            )
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+
+        assertEquals(DepStatus.UNKNOWN, results[0].status)
+        assertEquals(githubSignals, results[0].githubSignals)
     }
 }
