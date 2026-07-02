@@ -39,7 +39,9 @@ abstract class DependencyPulseTask : DefaultTask() {
     @TaskAction
     fun run() {
         val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get(), retryDelayMs = retryDelayMs.get())
-        val analyzer = DependencyAnalyzer(client)
+        val pomClient = PomClient()
+        val githubClient = GitHubClient(token = githubToken.orNull)
+        val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(
                 project,
