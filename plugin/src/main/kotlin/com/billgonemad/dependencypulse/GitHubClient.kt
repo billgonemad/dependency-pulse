@@ -1,0 +1,87 @@
+package com.billgonemad.dependencypulse
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.net.URI
+import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
+import java.time.Duration
+import java.time.Instant
+
+private const val TIMEOUT_SECONDS = 10L
+private const val HTTP_OK = 200
+
+open class GitHubClient(
+    private val baseUrl: String = "https://api.github.com",
+    private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+) {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    open fun fetchSignals(ownerRepo: String): GitHubSignals? {
+        val repoInfo = fetchRepoInfo(ownerRepo) ?: return null
+        return fetchLastCommitDate(ownerRepo)?.let { GitHubSignals(it, repoInfo.archived) }
+    }
+
+    private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {
+        val response = get("$baseUrl/repos/$ownerRepo")
+        return if (response.statusCode() == HTTP_OK) decodeRepoInfo(response.body()) else null
+    }
+
+    private fun fetchLastCommitDate(ownerRepo: String): Instant? {
+        val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1")
+        return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
+    }
+
+    private fun get(url: String): HttpResponse<String> {
+        val request =
+            HttpRequest
+                .newBuilder()
+                .uri(URI.create(url))
+                .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                .GET()
+                .build()
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+    }
+
+    private fun decodeRepoInfo(body: String): RepoInfo {
+        val dto = json.decodeFromString<RepoResponse>(body)
+        return RepoInfo(archived = dto.archived, pushedAt = dto.pushedAt?.let(Instant::parse))
+    }
+
+    private fun decodeLastCommitDate(body: String): Instant? =
+        json
+            .decodeFromString<List<CommitResponse>>(body)
+            .firstOrNull()
+            ?.commit
+            ?.committer
+            ?.date
+            ?.let(Instant::parse)
+}
+
+private data class RepoInfo(
+    val archived: Boolean,
+    val pushedAt: Instant?,
+)
+
+@Serializable
+private data class RepoResponse(
+    val archived: Boolean = false,
+    @SerialName("pushed_at") val pushedAt: String? = null,
+)
+
+@Serializable
+private data class CommitResponse(
+    val commit: CommitDetail? = null,
+)
+
+@Serializable
+private data class CommitDetail(
+    val committer: CommitterDetail? = null,
+)
+
+@Serializable
+private data class CommitterDetail(
+    val date: String? = null,
+)
