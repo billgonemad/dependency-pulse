@@ -40,25 +40,24 @@ open class GitHubClient(
         return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
     }
 
-    private fun get(url: String): HttpResponse<String>? {
-        val requestBuilder =
-            HttpRequest
-                .newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-                .GET()
-        if (token != null) requestBuilder.header("Authorization", "Bearer $token")
-        return try {
+    private fun get(url: String): HttpResponse<String>? =
+        try {
+            val requestBuilder =
+                HttpRequest
+                    .newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                    .GET()
+            if (token != null) requestBuilder.header("Authorization", "Bearer $token")
             httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+        } catch (ignored: IllegalArgumentException) {
+            null
         } catch (ignored: IOException) {
             null
         } catch (ignored: InterruptedException) {
             Thread.currentThread().interrupt()
             null
-        } catch (ignored: IllegalArgumentException) {
-            null
         }
-    }
 
     private fun decodeRepoInfo(body: String): RepoInfo? =
         try {

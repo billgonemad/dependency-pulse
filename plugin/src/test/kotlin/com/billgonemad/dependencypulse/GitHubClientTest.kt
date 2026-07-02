@@ -136,4 +136,8 @@ class GitHubClientTest {
 
         assertNull(client.fetchSignals("owner/repo"))
     }
+
+    @Test fun `returns null when owner-repo produces an invalid uri`() {
+        assertNull(client.fetchSignals("owner/repo with spaces"))
+    }
 }
