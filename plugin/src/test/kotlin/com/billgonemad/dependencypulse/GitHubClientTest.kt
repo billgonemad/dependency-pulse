@@ -118,4 +118,22 @@ class GitHubClientTest {
         assertNotNull(result)
         assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
     }
+
+    @Test fun `returns null when the repo is not found`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertNull(client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `returns null when the server is unreachable`() {
+        server.shutdown()
+
+        assertNull(client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `returns null for malformed json`() {
+        server.enqueue(MockResponse().setBody("not json"))
+
+        assertNull(client.fetchSignals("owner/repo"))
+    }
 }

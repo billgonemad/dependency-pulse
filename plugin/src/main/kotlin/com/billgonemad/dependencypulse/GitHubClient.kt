@@ -3,6 +3,7 @@ package com.billgonemad.dependencypulse
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -30,16 +31,16 @@ open class GitHubClient(
     }
 
     private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {
-        val response = get("$baseUrl/repos/$ownerRepo")
+        val response = get("$baseUrl/repos/$ownerRepo") ?: return null
         return if (response.statusCode() == HTTP_OK) decodeRepoInfo(response.body()) else null
     }
 
     private fun fetchLastCommitDate(ownerRepo: String): Instant? {
-        val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1")
+        val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1") ?: return null
         return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
     }
 
-    private fun get(url: String): HttpResponse<String> {
+    private fun get(url: String): HttpResponse<String>? {
         val requestBuilder =
             HttpRequest
                 .newBuilder()
@@ -47,22 +48,42 @@ open class GitHubClient(
                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .GET()
         if (token != null) requestBuilder.header("Authorization", "Bearer $token")
-        return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+        return try {
+            httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+        } catch (ignored: IOException) {
+            null
+        } catch (ignored: InterruptedException) {
+            Thread.currentThread().interrupt()
+            null
+        } catch (ignored: IllegalArgumentException) {
+            null
+        }
     }
 
-    private fun decodeRepoInfo(body: String): RepoInfo {
-        val dto = json.decodeFromString<RepoResponse>(body)
-        return RepoInfo(archived = dto.archived, pushedAt = dto.pushedAt?.let(Instant::parse))
-    }
+    private fun decodeRepoInfo(body: String): RepoInfo? =
+        try {
+            val dto = json.decodeFromString<RepoResponse>(body)
+            RepoInfo(archived = dto.archived, pushedAt = dto.pushedAt?.let(Instant::parse))
+        } catch (
+            @Suppress("TooGenericExceptionCaught") ignored: Exception,
+        ) {
+            null
+        }
 
     private fun decodeLastCommitDate(body: String): Instant? =
-        json
-            .decodeFromString<List<CommitResponse>>(body)
-            .firstOrNull()
-            ?.commit
-            ?.committer
-            ?.date
-            ?.let(Instant::parse)
+        try {
+            json
+                .decodeFromString<List<CommitResponse>>(body)
+                .firstOrNull()
+                ?.commit
+                ?.committer
+                ?.date
+                ?.let(Instant::parse)
+        } catch (
+            @Suppress("TooGenericExceptionCaught") ignored: Exception,
+        ) {
+            null
+        }
 }
 
 private data class RepoInfo(
