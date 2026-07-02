@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/billgonemad/dependency-pulse/compare/v0.3.0...v0.4.0) (2026-07-02)
+
+
+### Features
+
+* **github-signals:** extract GitHub SCM URL from dependency POMs ([e471a8e](https://github.com/billgonemad/dependency-pulse/commit/e471a8e68539ceab8ea234310d4aad5bfdb0622e))
+
+
+### Bug Fixes
+
+* **release:** remove redundant release-type from workflow so extra-files are applied ([b2a61a2](https://github.com/billgonemad/dependency-pulse/commit/b2a61a2d0154dd4637d5c133e0f1cc3112218d70))
+* **release:** rename config file to match release-please-action default path ([0f218ff](https://github.com/billgonemad/dependency-pulse/commit/0f218fff36d91d7ba6c932bd6dbcb52e1a849198))
+
 ## [0.3.0](https://github.com/billgonemad/dependency-pulse/compare/v0.2.0...v0.3.0) (2026-06-30)
 
 
