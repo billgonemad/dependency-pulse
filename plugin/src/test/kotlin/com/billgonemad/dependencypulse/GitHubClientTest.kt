@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class GitHubClientTest {
     private lateinit var server: MockWebServer
@@ -72,5 +73,37 @@ class GitHubClientTest {
 
         assertEquals("/repos/owner/repo", server.takeRequest().path)
         assertEquals("/repos/owner/repo/commits?per_page=1", server.takeRequest().path)
+    }
+
+    @Test fun `sends a Bearer Authorization header when a token is configured`() {
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                token = "secret-token",
+            )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        client.fetchSignals("owner/repo")
+
+        assertEquals("Bearer secret-token", server.takeRequest().getHeader("Authorization"))
+    }
+
+    @Test fun `omits the Authorization header when no token is configured`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        client.fetchSignals("owner/repo")
+
+        assertNull(server.takeRequest().getHeader("Authorization"))
     }
 }

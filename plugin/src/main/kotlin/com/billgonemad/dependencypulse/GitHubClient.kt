@@ -16,6 +16,7 @@ private const val HTTP_OK = 200
 open class GitHubClient(
     private val baseUrl: String = "https://api.github.com",
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val token: String? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -35,14 +36,14 @@ open class GitHubClient(
     }
 
     private fun get(url: String): HttpResponse<String> {
-        val request =
+        val requestBuilder =
             HttpRequest
                 .newBuilder()
                 .uri(URI.create(url))
                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                 .GET()
-                .build()
-        return httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+        if (token != null) requestBuilder.header("Authorization", "Bearer $token")
+        return httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
     }
 
     private fun decodeRepoInfo(body: String): RepoInfo {
