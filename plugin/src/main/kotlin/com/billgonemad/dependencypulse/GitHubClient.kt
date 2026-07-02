@@ -22,7 +22,11 @@ open class GitHubClient(
 
     open fun fetchSignals(ownerRepo: String): GitHubSignals? {
         val repoInfo = fetchRepoInfo(ownerRepo) ?: return null
-        return fetchLastCommitDate(ownerRepo)?.let { GitHubSignals(it, repoInfo.archived) }
+        // pushed_at is a repo-level approximation of the last commit date; used when
+        // the commits call fails (transient error, or the rate limit was hit on the
+        // second request) but the repo endpoint already succeeded.
+        val lastCommitDate = fetchLastCommitDate(ownerRepo) ?: repoInfo.pushedAt
+        return lastCommitDate?.let { GitHubSignals(it, repoInfo.archived) }
     }
 
     private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {

@@ -106,4 +106,16 @@ class GitHubClientTest {
 
         assertNull(server.takeRequest().getHeader("Authorization"))
     }
+
+    @Test fun `falls back to repo pushed_at when the commits endpoint fails`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertNotNull(result)
+        assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
+    }
 }
