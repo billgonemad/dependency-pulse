@@ -140,4 +140,50 @@ class GitHubClientTest {
     @Test fun `returns null when owner-repo produces an invalid uri`() {
         assertNull(client.fetchSignals("owner/repo with spaces"))
     }
+
+    @Test fun `returns null when the primary rate limit is exhausted`() {
+        server.enqueue(
+            MockResponse().setResponseCode(403).setHeader("X-RateLimit-Remaining", "0"),
+        )
+
+        assertNull(client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `short-circuits later calls once the primary rate limit is hit`() {
+        server.enqueue(
+            MockResponse().setResponseCode(403).setHeader("X-RateLimit-Remaining", "0"),
+        )
+
+        client.fetchSignals("owner/repo")
+        client.fetchSignals("another/repo")
+
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `short-circuits later calls when a Retry-After header signals a secondary rate limit`() {
+        server.enqueue(
+            MockResponse().setResponseCode(403).setHeader("Retry-After", "60"),
+        )
+
+        client.fetchSignals("owner/repo")
+        client.fetchSignals("another/repo")
+
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `a plain 403 without rate-limit headers does not short-circuit later calls`() {
+        server.enqueue(MockResponse().setResponseCode(403))
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        val first = client.fetchSignals("owner/repo")
+        val second = client.fetchSignals("another/repo")
+
+        assertNull(first)
+        assertNotNull(second)
+    }
 }

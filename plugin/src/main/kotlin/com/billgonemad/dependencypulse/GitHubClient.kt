@@ -13,6 +13,9 @@ import java.time.Instant
 
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
+private const val HTTP_FORBIDDEN = 403
+private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
+private const val HEADER_RETRY_AFTER = "Retry-After"
 
 open class GitHubClient(
     private val baseUrl: String = "https://api.github.com",
@@ -20,6 +23,7 @@ open class GitHubClient(
     private val token: String? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
+    private var rateLimited = false
 
     open fun fetchSignals(ownerRepo: String): GitHubSignals? {
         val repoInfo = fetchRepoInfo(ownerRepo) ?: return null
@@ -40,8 +44,9 @@ open class GitHubClient(
         return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
     }
 
-    private fun get(url: String): HttpResponse<String>? =
-        try {
+    private fun get(url: String): HttpResponse<String>? {
+        if (rateLimited) return null
+        return try {
             val requestBuilder =
                 HttpRequest
                     .newBuilder()
@@ -49,7 +54,9 @@ open class GitHubClient(
                     .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                     .GET()
             if (token != null) requestBuilder.header("Authorization", "Bearer $token")
-            httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            val response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+            if (response.statusCode() == HTTP_FORBIDDEN) checkRateLimit(response)
+            response
         } catch (ignored: IllegalArgumentException) {
             null
         } catch (ignored: IOException) {
@@ -58,6 +65,13 @@ open class GitHubClient(
             Thread.currentThread().interrupt()
             null
         }
+    }
+
+    private fun checkRateLimit(response: HttpResponse<String>) {
+        val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
+        val retryAfter = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
+        if (remaining == "0" || retryAfter != null) rateLimited = true
+    }
 
     private fun decodeRepoInfo(body: String): RepoInfo? =
         try {
