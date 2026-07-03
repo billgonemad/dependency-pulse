@@ -33,7 +33,7 @@ class ReportPrinterTest {
         artifact = artifact,
         currentVersion = version,
         mavenSignals = signals,
-        githubSignals = null,
+        githubSignals = GitHubSignals.NoRepo,
         javaxBlocker = false,
         status = status,
         errorMessage = errorMessage,

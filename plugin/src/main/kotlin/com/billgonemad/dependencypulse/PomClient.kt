@@ -2,18 +2,11 @@ package com.billgonemad.dependencypulse
 
 import org.w3c.dom.Document
 import org.w3c.dom.Element
-import java.io.IOException
-import java.net.URI
 import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
-import java.time.Duration
 import javax.xml.parsers.DocumentBuilderFactory
 
 private val GITHUB_URL_PATTERN = Regex("""(?<![\w-])github\.com[/:]+([\w.-]+)/([\w.-]+)""")
 
-private const val TIMEOUT_SECONDS = 10L
-private const val HTTP_OK = 200
 private const val DISALLOW_DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl"
 
 internal fun normalizeGitHubUrl(rawUrl: String?): String? {
@@ -50,24 +43,8 @@ open class PomClient(
         version: String,
     ): String? {
         val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        return try {
-            val request =
-                HttpRequest
-                    .newBuilder()
-                    .uri(URI.create("$baseUrl/$path"))
-                    .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-                    .GET()
-                    .build()
-            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() == HTTP_OK) response.body() else null
-        } catch (ignored: IllegalArgumentException) {
-            null
-        } catch (ignored: IOException) {
-            null
-        } catch (ignored: InterruptedException) {
-            Thread.currentThread().interrupt()
-            null
-        }
+        val response = safeGet(httpClient, "$baseUrl/$path").orNull() ?: return null
+        return if (response.statusCode() == HTTP_OK) response.body() else null
     }
 
     private fun parsePom(xml: String): Document? =

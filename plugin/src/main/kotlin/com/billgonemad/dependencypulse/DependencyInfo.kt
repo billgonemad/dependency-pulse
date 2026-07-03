@@ -10,17 +10,25 @@ data class MavenSignals(
     val latestReleaseDate: Instant,
 )
 
-data class GitHubSignals(
-    val lastCommitDate: Instant,
-    val isArchived: Boolean,
-)
+sealed class GitHubSignals {
+    data class Found(
+        val lastCommitDate: Instant?,
+        val isArchived: Boolean,
+    ) : GitHubSignals()
+
+    object NoRepo : GitHubSignals()
+
+    object RateLimited : GitHubSignals()
+
+    object FetchFailed : GitHubSignals()
+}
 
 data class DependencyInfo(
     val group: String,
     val artifact: String,
     val currentVersion: String,
     val mavenSignals: MavenSignals?,
-    val githubSignals: GitHubSignals?,
+    val githubSignals: GitHubSignals,
     val status: DepStatus,
     val errorMessage: String?,
     val javaxBlocker: Boolean = false,

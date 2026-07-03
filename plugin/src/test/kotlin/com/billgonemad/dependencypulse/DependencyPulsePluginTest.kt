@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class DependencyPulsePluginTest {
     @Test fun `plugin registers dependencyPulse task`() {
@@ -84,5 +85,45 @@ class DependencyPulsePluginTest {
 
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals("my-token", task.githubToken.get())
+    }
+
+    @Test fun `pomBaseUrl and githubApiBaseUrl default to the real APIs`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        assertEquals("https://repo1.maven.org/maven2", task.pomBaseUrl.get())
+        assertEquals("https://api.github.com", task.githubApiBaseUrl.get())
+    }
+
+    @Test fun `pomBaseUrl and githubApiBaseUrl can be overridden via system property`() {
+        System.setProperty("pomBaseUrl", "http://localhost:8081")
+        System.setProperty("githubApiBaseUrl", "http://localhost:8082")
+        try {
+            val project = ProjectBuilder.builder().build()
+            project.plugins.apply("com.billgonemad.dependency-pulse")
+            val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+            assertEquals("http://localhost:8081", task.pomBaseUrl.get())
+            assertEquals("http://localhost:8082", task.githubApiBaseUrl.get())
+        } finally {
+            System.clearProperty("pomBaseUrl")
+            System.clearProperty("githubApiBaseUrl")
+        }
+    }
+
+    @Test fun `githubRateLimitService resolves to a usable shared instance`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        val service = task.githubRateLimitService.get()
+
+        assertNull(service.limitedUntil)
+        val until =
+            java.time.Instant
+                .now()
+                .plusSeconds(60)
+        service.limitedUntil = until
+        assertEquals(until, service.limitedUntil)
     }
 }

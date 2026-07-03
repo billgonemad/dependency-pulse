@@ -5,9 +5,11 @@ import org.gradle.api.GradleException
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
+import java.net.http.HttpClient
 
 @DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
@@ -30,16 +32,39 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val mavenCentralBaseUrl: Property<String>
 
     @get:Input
+    abstract val pomBaseUrl: Property<String>
+
+    @get:Input
+    abstract val githubApiBaseUrl: Property<String>
+
+    @get:Input
     abstract val retryDelayMs: Property<Long>
 
     @get:Input
     @get:Optional
     abstract val githubToken: Property<String>
 
+    @get:Internal
+    abstract val githubRateLimitService: Property<GitHubRateLimitService>
+
     @TaskAction
     fun run() {
-        val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get(), retryDelayMs = retryDelayMs.get())
-        val analyzer = DependencyAnalyzer(client)
+        val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+        val client =
+            MavenCentralClient(
+                baseUrl = mavenCentralBaseUrl.get(),
+                httpClient = httpClient,
+                retryDelayMs = retryDelayMs.get(),
+            )
+        val pomClient = PomClient(baseUrl = pomBaseUrl.get(), httpClient = httpClient)
+        val githubClient =
+            GitHubClient(
+                baseUrl = githubApiBaseUrl.get(),
+                httpClient = httpClient,
+                token = githubToken.orNull,
+                rateLimitState = githubRateLimitService.get(),
+            )
+        val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(
                 project,

@@ -1,7 +1,6 @@
 package com.billgonemad.dependencypulse
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.net.URI
 import java.net.URLEncoder
@@ -10,9 +9,8 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
-private const val TIMEOUT_SECONDS = 10L
-private const val HTTP_OK = 200
 private const val MAX_RETRIES = 3
 
 // Versions fetched per artifact (newest first). Must exceed the number of
@@ -38,8 +36,7 @@ open class MavenCentralClient(
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
     private val retryDelayMs: Long = 1_000L,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-    private val urlCache = HashMap<String, List<VersionEntry>>()
+    private val urlCache = ConcurrentHashMap<String, List<VersionEntry>>()
 
     open fun fetchSignals(
         group: String,
@@ -64,7 +61,7 @@ open class MavenCentralClient(
             HttpRequest
                 .newBuilder()
                 .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                .timeout(Duration.ofSeconds(DEFAULT_HTTP_TIMEOUT_SECONDS))
                 .GET()
                 .build()
         var attempt = 0
@@ -73,7 +70,7 @@ open class MavenCentralClient(
             when {
                 response.statusCode() == HTTP_OK -> {
                     val versions =
-                        json
+                        DEFAULT_JSON
                             .decodeFromString<SolrSearchResponse>(response.body())
                             .response.docs
                             .mapNotNull { it.toVersionEntry() }

@@ -67,8 +67,12 @@ class DependencyPulsePluginFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
-                .build()
+                .withArguments(
+                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                ).build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("Dependency Pulse Report"))
@@ -107,6 +111,8 @@ class DependencyPulsePluginFunctionalTest {
                 .withCompatGradleVersion()
                 .withArguments(
                     "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "-DmavenCentralRetryDelayMs=0",
                     "dependencyPulse",
                 ).buildAndFail()
@@ -138,8 +144,12 @@ class DependencyPulsePluginFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "check")
-                .build()
+                .withArguments(
+                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "check",
+                ).build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
     }
@@ -168,8 +178,12 @@ class DependencyPulsePluginFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "check")
-                .build()
+                .withArguments(
+                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "check",
+                ).build()
 
         assertEquals(null, result.task(":dependencyPulse")?.outcome)
     }
@@ -207,8 +221,12 @@ class DependencyPulsePluginFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}", "dependencyPulse")
-                .buildAndFail()
+                .withArguments(
+                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                ).buildAndFail()
 
         assertTrue(result.output.contains("🔴"))
     }
