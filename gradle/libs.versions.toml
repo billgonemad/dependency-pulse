@@ -18,7 +18,7 @@ kotlin = "2.4.0"
 kotlinx-serialization = "1.11.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
 mockwebserver = "5.4.0"
-spotless = "8.7.0"     # latest stable verified at impl time
+spotless = "8.8.0"     # latest stable verified at impl time
 plugin-publish = "2.1.1"
 
 [libraries]
