@@ -9,7 +9,7 @@ class DependencyInfoTest {
     @Test
     fun `DependencyInfo holds all fields`() {
         val maven = MavenSignals("2.0", Instant.EPOCH)
-        val github = GitHubSignals(Instant.EPOCH, false)
+        val github = GitHubSignals.Found(Instant.EPOCH, false)
         val info =
             DependencyInfo(
                 group = "com.example",
@@ -31,9 +31,16 @@ class DependencyInfoTest {
     }
 
     @Test
-    fun `GitHubSignals archived flag is stored`() {
-        val signals = GitHubSignals(Instant.EPOCH, isArchived = true)
+    fun `GitHubSignals Found archived flag is stored`() {
+        val signals = GitHubSignals.Found(Instant.EPOCH, isArchived = true)
         assertEquals(Instant.EPOCH, signals.lastCommitDate)
+        assertEquals(true, signals.isArchived)
+    }
+
+    @Test
+    fun `GitHubSignals Found allows a null lastCommitDate`() {
+        val signals = GitHubSignals.Found(lastCommitDate = null, isArchived = true)
+        assertEquals(null, signals.lastCommitDate)
         assertEquals(true, signals.isArchived)
     }
 }

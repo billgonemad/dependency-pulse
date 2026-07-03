@@ -83,5 +83,13 @@ class DependencyAnalyzer(
         group: String,
         artifact: String,
         version: String,
-    ): GitHubSignals? = pomClient.fetchGitHubRepo(group, artifact, version)?.let { githubClient.fetchSignals(it) }
+    ): GitHubSignals =
+        try {
+            val repo = pomClient.fetchGitHubRepo(group, artifact, version)
+            repo?.let { githubClient.fetchSignals(it) } ?: GitHubSignals.NoRepo
+        } catch (
+            @Suppress("TooGenericExceptionCaught") ignored: Exception,
+        ) {
+            GitHubSignals.FetchFailed
+        }
 }

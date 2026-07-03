@@ -9,7 +9,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 
 class GitHubClientTest {
@@ -42,7 +42,7 @@ class GitHubClientTest {
 
         val result = client.fetchSignals("owner/repo")
 
-        assertNotNull(result)
+        assertIs<GitHubSignals.Found>(result)
         assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
         assertFalse(result.isArchived)
     }
@@ -57,8 +57,21 @@ class GitHubClientTest {
 
         val result = client.fetchSignals("owner/repo")
 
-        assertNotNull(result)
+        assertIs<GitHubSignals.Found>(result)
         assertEquals(true, result.isArchived)
+    }
+
+    @Test fun `still reports the archived flag when neither commits nor pushed_at yield a date`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":true,"pushed_at":null}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(409))
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(true, result.isArchived)
+        assertNull(result.lastCommitDate)
     }
 
     @Test fun `requests the repo endpoint before the commits endpoint`() {
@@ -107,46 +120,46 @@ class GitHubClientTest {
         assertNull(server.takeRequest().getHeader("Authorization"))
     }
 
-    @Test fun `falls back to repo pushed_at when the commits endpoint fails`() {
+    @Test fun `falls back to repo pushed_at when the commits endpoint has no commits`() {
         server.enqueue(
             MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
         )
-        server.enqueue(MockResponse().setResponseCode(500))
+        server.enqueue(MockResponse().setResponseCode(404))
 
         val result = client.fetchSignals("owner/repo")
 
-        assertNotNull(result)
+        assertIs<GitHubSignals.Found>(result)
         assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
     }
 
-    @Test fun `returns null when the repo is not found`() {
+    @Test fun `returns FetchFailed when the repo is not found`() {
         server.enqueue(MockResponse().setResponseCode(404))
 
-        assertNull(client.fetchSignals("owner/repo"))
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo"))
     }
 
-    @Test fun `returns null when the server is unreachable`() {
+    @Test fun `returns FetchFailed when the server is unreachable`() {
         server.shutdown()
 
-        assertNull(client.fetchSignals("owner/repo"))
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo"))
     }
 
-    @Test fun `returns null for malformed json`() {
+    @Test fun `returns FetchFailed for malformed json`() {
         server.enqueue(MockResponse().setBody("not json"))
 
-        assertNull(client.fetchSignals("owner/repo"))
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo"))
     }
 
-    @Test fun `returns null when owner-repo produces an invalid uri`() {
-        assertNull(client.fetchSignals("owner/repo with spaces"))
+    @Test fun `returns FetchFailed when owner-repo produces an invalid uri`() {
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo with spaces"))
     }
 
-    @Test fun `returns null when the primary rate limit is exhausted`() {
+    @Test fun `returns RateLimited when the primary rate limit is exhausted`() {
         server.enqueue(
             MockResponse().setResponseCode(403).setHeader("X-RateLimit-Remaining", "0"),
         )
 
-        assertNull(client.fetchSignals("owner/repo"))
+        assertEquals(GitHubSignals.RateLimited, client.fetchSignals("owner/repo"))
     }
 
     @Test fun `short-circuits later calls once the primary rate limit is hit`() {
@@ -155,8 +168,9 @@ class GitHubClientTest {
         )
 
         client.fetchSignals("owner/repo")
-        client.fetchSignals("another/repo")
+        val second = client.fetchSignals("another/repo")
 
+        assertEquals(GitHubSignals.RateLimited, second)
         assertEquals(1, server.requestCount)
     }
 
@@ -194,7 +208,7 @@ class GitHubClientTest {
         val first = client.fetchSignals("owner/repo")
         val second = client.fetchSignals("another/repo")
 
-        assertNull(first)
-        assertNotNull(second)
+        assertEquals(GitHubSignals.FetchFailed, first)
+        assertIs<GitHubSignals.Found>(second)
     }
 }

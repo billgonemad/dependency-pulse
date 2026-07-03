@@ -26,13 +26,12 @@ open class GitHubClient(
     private val json = Json { ignoreUnknownKeys = true }
     private var rateLimited = false
 
-    open fun fetchSignals(ownerRepo: String): GitHubSignals? {
-        val repoInfo = fetchRepoInfo(ownerRepo) ?: return null
-        // pushed_at is a repo-level approximation of the last commit date; used when
-        // the commits call fails (transient error, or the rate limit was hit on the
-        // second request) but the repo endpoint already succeeded.
+    open fun fetchSignals(ownerRepo: String): GitHubSignals {
+        val repoInfo =
+            fetchRepoInfo(ownerRepo)
+                ?: return if (rateLimited) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
         val lastCommitDate = fetchLastCommitDate(ownerRepo) ?: repoInfo.pushedAt
-        return lastCommitDate?.let { GitHubSignals(it, repoInfo.archived) }
+        return GitHubSignals.Found(lastCommitDate, repoInfo.archived)
     }
 
     private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {

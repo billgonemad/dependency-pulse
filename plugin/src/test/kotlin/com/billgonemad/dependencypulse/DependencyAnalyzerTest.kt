@@ -6,7 +6,6 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 
 class DependencyAnalyzerTest {
     private val now = Instant.now()
@@ -39,7 +38,16 @@ class DependencyAnalyzerTest {
             ) = repo
         }
 
-    private fun stubGithubClient(signals: GitHubSignals? = null): GitHubClient =
+    private fun throwingPomClient(): PomClient =
+        object : PomClient() {
+            override fun fetchGitHubRepo(
+                group: String,
+                artifact: String,
+                version: String,
+            ): String? = error("simulated PomClient bug")
+        }
+
+    private fun stubGithubClient(signals: GitHubSignals = GitHubSignals.FetchFailed): GitHubClient =
         object : GitHubClient() {
             override fun fetchSignals(ownerRepo: String) = signals
         }
@@ -109,7 +117,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `populates githubSignals when the dependency has a resolvable GitHub repo`() {
-        val githubSignals = GitHubSignals(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
         val analyzer =
             analyzerWith(
                 greenSignals,
@@ -123,7 +131,7 @@ class DependencyAnalyzerTest {
         assertEquals(githubSignals, results[0].githubSignals)
     }
 
-    @Test fun `leaves githubSignals null when no GitHub repo can be resolved from the POM`() {
+    @Test fun `leaves githubSignals as NoRepo when no GitHub repo can be resolved from the POM`() {
         val analyzer =
             analyzerWith(
                 greenSignals,
@@ -133,11 +141,11 @@ class DependencyAnalyzerTest {
 
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
 
-        assertNull(results[0].githubSignals)
+        assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
     }
 
     @Test fun `still populates githubSignals when the Maven Central lookup throws`() {
-        val githubSignals = GitHubSignals(now, isArchived = true)
+        val githubSignals = GitHubSignals.Found(now, isArchived = true)
         val resolver = { _: Project, _: List<String> ->
             setOf(Coords("org.example", "bad", "1.0"))
         }
@@ -153,5 +161,19 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertEquals(githubSignals, results[0].githubSignals)
+    }
+
+    @Test fun `sets githubSignals to FetchFailed when PomClient throws unexpectedly`() {
+        val analyzer =
+            analyzerWith(
+                greenSignals,
+                setOf(Coords("org.example", "risky", "1.0")),
+                pomClient = throwingPomClient(),
+            )
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+
+        assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
+        assertEquals(DepStatus.GREEN, results[0].status)
     }
 }
