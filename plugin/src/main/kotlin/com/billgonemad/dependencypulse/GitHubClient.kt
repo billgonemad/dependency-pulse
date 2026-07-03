@@ -29,6 +29,7 @@ open class GitHubClient(
     private val token: String? = null,
     private val retryDelayMs: Long = 1_000L,
 ) {
+    @Volatile
     private var rateLimited = false
 
     open fun fetchSignals(ownerRepo: String): GitHubSignals {

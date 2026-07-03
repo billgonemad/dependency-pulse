@@ -1,6 +1,10 @@
 package com.billgonemad.dependencypulse
 
 import org.gradle.api.Project
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+
+private const val CONCURRENCY = 8
 
 internal data class Coords(
     val group: String,
@@ -46,38 +50,52 @@ class DependencyAnalyzer(
         ignoreConfigurations: List<String>,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
-    ): List<DependencyInfo> =
-        resolver(project, ignoreConfigurations)
-            .sortedWith(compareBy({ it.group }, { it.artifact }))
-            .map { (group, artifact, version) ->
-                val githubSignals = resolveGithubSignals(group, artifact, version)
-                try {
-                    val signals = client.fetchSignals(group, artifact, version)
-                    DependencyInfo(
-                        group = group,
-                        artifact = artifact,
-                        currentVersion = version,
-                        mavenSignals = signals,
-                        githubSignals = githubSignals,
-                        javaxBlocker = false,
-                        status = score(signals, yellowAfterMonths, redAfterMonths),
-                        errorMessage = null,
-                    )
-                } catch (
-                    @Suppress("TooGenericExceptionCaught") e: Exception,
-                ) {
-                    DependencyInfo(
-                        group = group,
-                        artifact = artifact,
-                        currentVersion = version,
-                        mavenSignals = null,
-                        githubSignals = githubSignals,
-                        javaxBlocker = false,
-                        status = DepStatus.UNKNOWN,
-                        errorMessage = e.message,
-                    )
-                }
-            }
+    ): List<DependencyInfo> {
+        val coords = resolver(project, ignoreConfigurations).sortedWith(compareBy({ it.group }, { it.artifact }))
+        val executor = Executors.newFixedThreadPool(minOf(CONCURRENCY, maxOf(coords.size, 1)))
+        return try {
+            coords
+                .map { coord -> executor.submit(Callable { analyzeOne(coord, yellowAfterMonths, redAfterMonths) }) }
+                .map { it.get() }
+        } finally {
+            executor.shutdown()
+        }
+    }
+
+    private fun analyzeOne(
+        coord: Coords,
+        yellowAfterMonths: Int,
+        redAfterMonths: Int,
+    ): DependencyInfo {
+        val (group, artifact, version) = coord
+        val githubSignals = resolveGithubSignals(group, artifact, version)
+        return try {
+            val signals = client.fetchSignals(group, artifact, version)
+            DependencyInfo(
+                group = group,
+                artifact = artifact,
+                currentVersion = version,
+                mavenSignals = signals,
+                githubSignals = githubSignals,
+                javaxBlocker = false,
+                status = score(signals, yellowAfterMonths, redAfterMonths),
+                errorMessage = null,
+            )
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            DependencyInfo(
+                group = group,
+                artifact = artifact,
+                currentVersion = version,
+                mavenSignals = null,
+                githubSignals = githubSignals,
+                javaxBlocker = false,
+                status = DepStatus.UNKNOWN,
+                errorMessage = e.message,
+            )
+        }
+    }
 
     private fun resolveGithubSignals(
         group: String,

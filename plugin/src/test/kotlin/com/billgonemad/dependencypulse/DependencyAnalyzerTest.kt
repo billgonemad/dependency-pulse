@@ -3,9 +3,11 @@ package com.billgonemad.dependencypulse
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import java.time.Instant
+import kotlin.system.measureTimeMillis
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class DependencyAnalyzerTest {
     private val now = Instant.now()
@@ -175,5 +177,30 @@ class DependencyAnalyzerTest {
 
         assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
         assertEquals(DepStatus.GREEN, results[0].status)
+    }
+
+    @Test fun `resolves multiple dependencies concurrently rather than strictly sequentially`() {
+        val delayMs = 200L
+        val slowClient =
+            object : MavenCentralClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                ): MavenSignals? {
+                    Thread.sleep(delayMs)
+                    return greenSignals
+                }
+            }
+        val coords = (1..4).map { Coords("org.example", "dep$it", "1.0") }.toSet()
+        val resolver = { _: Project, _: List<String> -> coords }
+        val analyzer = DependencyAnalyzer(slowClient, stubPomClient(), stubGithubClient(), resolver)
+
+        val elapsedMs =
+            measureTimeMillis {
+                analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+            }
+
+        assertTrue(elapsedMs < delayMs * coords.size)
     }
 }

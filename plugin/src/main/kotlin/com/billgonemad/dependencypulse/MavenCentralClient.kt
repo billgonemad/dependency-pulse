@@ -9,6 +9,7 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.ConcurrentHashMap
 
 private const val MAX_RETRIES = 3
 
@@ -35,7 +36,7 @@ open class MavenCentralClient(
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
     private val retryDelayMs: Long = 1_000L,
 ) {
-    private val urlCache = HashMap<String, List<VersionEntry>>()
+    private val urlCache = ConcurrentHashMap<String, List<VersionEntry>>()
 
     open fun fetchSignals(
         group: String,
