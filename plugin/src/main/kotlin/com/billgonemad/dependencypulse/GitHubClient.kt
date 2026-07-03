@@ -29,6 +29,7 @@ internal interface RateLimitState {
     companion object {
         fun local(): RateLimitState =
             object : RateLimitState {
+                @Volatile
                 override var limited: Boolean = false
             }
     }
