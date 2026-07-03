@@ -2,17 +2,10 @@ package com.billgonemad.dependencypulse
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import java.io.IOException
-import java.net.URI
 import java.net.http.HttpClient
-import java.net.http.HttpRequest
 import java.net.http.HttpResponse
-import java.time.Duration
 import java.time.Instant
 
-private const val TIMEOUT_SECONDS = 10L
-private const val HTTP_OK = 200
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
@@ -36,7 +29,6 @@ open class GitHubClient(
     private val token: String? = null,
     private val retryDelayMs: Long = 1_000L,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
     private var rateLimited = false
 
     open fun fetchSignals(ownerRepo: String): GitHubSignals {
@@ -62,7 +54,10 @@ open class GitHubClient(
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
-            val response = sendRequest(url)
+            val response =
+                safeGet(httpClient, url) {
+                    if (token != null) header("Authorization", "Bearer $token")
+                }
             val statusCode = response?.statusCode()
             if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
             result = response
@@ -74,25 +69,6 @@ open class GitHubClient(
         return result
     }
 
-    private fun sendRequest(url: String): HttpResponse<String>? =
-        try {
-            val requestBuilder =
-                HttpRequest
-                    .newBuilder()
-                    .uri(URI.create(url))
-                    .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
-                    .GET()
-            if (token != null) requestBuilder.header("Authorization", "Bearer $token")
-            httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
-        } catch (ignored: IllegalArgumentException) {
-            null
-        } catch (ignored: IOException) {
-            null
-        } catch (ignored: InterruptedException) {
-            Thread.currentThread().interrupt()
-            null
-        }
-
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
         val retryAfter = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
@@ -101,7 +77,7 @@ open class GitHubClient(
 
     private fun decodeRepoInfo(body: String): RepoInfo? =
         try {
-            val dto = json.decodeFromString<RepoResponse>(body)
+            val dto = DEFAULT_JSON.decodeFromString<RepoResponse>(body)
             RepoInfo(archived = dto.archived, pushedAt = dto.pushedAt?.let(Instant::parse))
         } catch (
             @Suppress("TooGenericExceptionCaught") ignored: Exception,
@@ -111,7 +87,7 @@ open class GitHubClient(
 
     private fun decodeLastCommitDate(body: String): Instant? =
         try {
-            json
+            DEFAULT_JSON
                 .decodeFromString<List<CommitResponse>>(body)
                 .firstOrNull()
                 ?.commit
