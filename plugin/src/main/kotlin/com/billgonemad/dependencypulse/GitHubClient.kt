@@ -68,8 +68,7 @@ open class GitHubClient internal constructor(
     }
 
     private fun get(url: String): HttpResponse<String>? {
-        val limitedUntil = rateLimitState.limitedUntil
-        if (limitedUntil != null && Instant.now().isBefore(limitedUntil)) return null
+        if (isRateLimited()) return null
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
