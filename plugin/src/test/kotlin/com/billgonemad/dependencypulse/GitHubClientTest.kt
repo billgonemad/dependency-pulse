@@ -171,6 +171,17 @@ class GitHubClientTest {
         assertEquals(1, server.requestCount)
     }
 
+    @Test fun `short-circuits later calls when a 429 response signals the rate limit is exhausted`() {
+        server.enqueue(
+            MockResponse().setResponseCode(429).setHeader("X-RateLimit-Remaining", "0"),
+        )
+
+        client.fetchSignals("owner/repo")
+        client.fetchSignals("another/repo")
+
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun `a plain 403 without rate-limit headers does not short-circuit later calls`() {
         server.enqueue(MockResponse().setResponseCode(403))
         server.enqueue(

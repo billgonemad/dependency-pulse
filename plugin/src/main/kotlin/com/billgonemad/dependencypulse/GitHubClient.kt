@@ -14,6 +14,7 @@ import java.time.Instant
 private const val TIMEOUT_SECONDS = 10L
 private const val HTTP_OK = 200
 private const val HTTP_FORBIDDEN = 403
+private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
 private const val HEADER_RETRY_AFTER = "Retry-After"
 
@@ -55,7 +56,8 @@ open class GitHubClient(
                     .GET()
             if (token != null) requestBuilder.header("Authorization", "Bearer $token")
             val response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
-            if (response.statusCode() == HTTP_FORBIDDEN) checkRateLimit(response)
+            val statusCode = response.statusCode()
+            if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
             response
         } catch (ignored: IllegalArgumentException) {
             null
