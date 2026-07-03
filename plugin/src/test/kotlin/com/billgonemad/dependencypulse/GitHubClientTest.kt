@@ -211,6 +211,57 @@ class GitHubClientTest {
         assertIs<GitHubSignals.Found>(second)
     }
 
+    @Test fun `retries a transient 503 from the commits endpoint before falling back`() {
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                retryDelayMs = 0L,
+            )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(503))
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun `exhausts retries on a persistent 503 and falls back to pushed_at`() {
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                retryDelayMs = 0L,
+            )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        repeat(4) { server.enqueue(MockResponse().setResponseCode(503)) }
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
+        assertEquals(5, server.requestCount)
+    }
+
+    @Test fun `does not retry a 403 rate-limit response`() {
+        server.enqueue(
+            MockResponse().setResponseCode(403).setHeader("X-RateLimit-Remaining", "0"),
+        )
+
+        client.fetchSignals("owner/repo")
+
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun `follows redirects for renamed repos`() {
         server.enqueue(
             MockResponse()

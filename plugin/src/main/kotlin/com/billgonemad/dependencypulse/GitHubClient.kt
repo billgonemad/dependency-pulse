@@ -17,11 +17,24 @@ private const val HTTP_FORBIDDEN = 403
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
 private const val HEADER_RETRY_AFTER = "Retry-After"
+private const val MAX_RETRIES = 3
+private const val HTTP_INTERNAL_SERVER_ERROR = 500
+private const val HTTP_BAD_GATEWAY = 502
+private const val HTTP_SERVICE_UNAVAILABLE = 503
+private const val HTTP_GATEWAY_TIMEOUT = 504
+private val RETRYABLE_CODES =
+    setOf(
+        HTTP_INTERNAL_SERVER_ERROR,
+        HTTP_BAD_GATEWAY,
+        HTTP_SERVICE_UNAVAILABLE,
+        HTTP_GATEWAY_TIMEOUT,
+    )
 
 open class GitHubClient(
     private val baseUrl: String = "https://api.github.com",
     private val httpClient: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
     private val token: String? = null,
+    private val retryDelayMs: Long = 1_000L,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private var rateLimited = false
@@ -46,7 +59,23 @@ open class GitHubClient(
 
     private fun get(url: String): HttpResponse<String>? {
         if (rateLimited) return null
-        return try {
+        var attempt = 0
+        var result: HttpResponse<String>? = null
+        while (true) {
+            val response = sendRequest(url)
+            val statusCode = response?.statusCode()
+            if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
+            result = response
+            val canRetry = statusCode != null && statusCode in RETRYABLE_CODES && attempt < MAX_RETRIES
+            if (!canRetry) break
+            Thread.sleep(retryDelayMs * (1L shl attempt))
+            attempt++
+        }
+        return result
+    }
+
+    private fun sendRequest(url: String): HttpResponse<String>? =
+        try {
             val requestBuilder =
                 HttpRequest
                     .newBuilder()
@@ -54,10 +83,7 @@ open class GitHubClient(
                     .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
                     .GET()
             if (token != null) requestBuilder.header("Authorization", "Bearer $token")
-            val response = httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
-            val statusCode = response.statusCode()
-            if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
-            response
+            httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
         } catch (ignored: IllegalArgumentException) {
             null
         } catch (ignored: IOException) {
@@ -66,7 +92,6 @@ open class GitHubClient(
             Thread.currentThread().interrupt()
             null
         }
-    }
 
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
