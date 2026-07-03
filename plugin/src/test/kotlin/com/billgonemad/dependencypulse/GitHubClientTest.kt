@@ -13,8 +13,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 class GitHubClientTest {
     private lateinit var server: MockWebServer
@@ -309,7 +309,53 @@ class GitHubClientTest {
         assertEquals(GitHubSignals.RateLimited, fromA)
         assertEquals(GitHubSignals.RateLimited, fromB)
         assertEquals(1, server.requestCount)
-        assertTrue(sharedState.limited)
+        assertNotNull(sharedState.limitedUntil)
+    }
+
+    @Test fun `a rate limit that has already expired does not short-circuit calls`() {
+        val expiredState =
+            object : RateLimitState {
+                override var limitedUntil: Instant? = Instant.now().minusSeconds(10)
+            }
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                rateLimitState = expiredState,
+            )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+    }
+
+    @Test fun `uses the X-RateLimit-Reset header to compute exactly when the limit clears`() {
+        val resetEpochSecond = Instant.now().plusSeconds(120).epochSecond
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .setHeader("X-RateLimit-Remaining", "0")
+                .setHeader("X-RateLimit-Reset", resetEpochSecond.toString()),
+        )
+        val sharedState = RateLimitState.local()
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                rateLimitState = sharedState,
+            )
+
+        client.fetchSignals("owner/repo")
+
+        val limitedUntil = sharedState.limitedUntil
+        assertNotNull(limitedUntil)
+        assertEquals(resetEpochSecond, limitedUntil.epochSecond)
     }
 
     @Test fun `retries a connection-level failure before falling back`() {

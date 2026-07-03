@@ -9,7 +9,9 @@ import java.time.Instant
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
+private const val HEADER_RATE_LIMIT_RESET = "X-RateLimit-Reset"
 private const val HEADER_RETRY_AFTER = "Retry-After"
+private const val DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS = 60L
 private const val MAX_RETRIES = 3
 private const val HTTP_INTERNAL_SERVER_ERROR = 500
 private const val HTTP_BAD_GATEWAY = 502
@@ -24,13 +26,13 @@ private val RETRYABLE_CODES =
     )
 
 internal interface RateLimitState {
-    var limited: Boolean
+    var limitedUntil: Instant?
 
     companion object {
         fun local(): RateLimitState =
             object : RateLimitState {
                 @Volatile
-                override var limited: Boolean = false
+                override var limitedUntil: Instant? = null
             }
     }
 }
@@ -45,9 +47,14 @@ open class GitHubClient internal constructor(
     open fun fetchSignals(ownerRepo: String): GitHubSignals {
         val repoInfo =
             fetchRepoInfo(ownerRepo)
-                ?: return if (rateLimitState.limited) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
+                ?: return if (isRateLimited()) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
         val lastCommitDate = fetchLastCommitDate(ownerRepo) ?: repoInfo.pushedAt
         return GitHubSignals.Found(lastCommitDate, repoInfo.archived)
+    }
+
+    private fun isRateLimited(): Boolean {
+        val limitedUntil = rateLimitState.limitedUntil
+        return limitedUntil != null && Instant.now().isBefore(limitedUntil)
     }
 
     private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {
@@ -61,7 +68,8 @@ open class GitHubClient internal constructor(
     }
 
     private fun get(url: String): HttpResponse<String>? {
-        if (rateLimitState.limited) return null
+        val limitedUntil = rateLimitState.limitedUntil
+        if (limitedUntil != null && Instant.now().isBefore(limitedUntil)) return null
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
@@ -85,8 +93,26 @@ open class GitHubClient internal constructor(
 
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
-        val retryAfter = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
-        if (remaining == "0" || retryAfter != null) rateLimitState.limited = true
+        val reset =
+            response
+                .headers()
+                .firstValue(HEADER_RATE_LIMIT_RESET)
+                .orElse(null)
+                ?.toLongOrNull()
+        val retryAfter =
+            response
+                .headers()
+                .firstValue(HEADER_RETRY_AFTER)
+                .orElse(null)
+                ?.toLongOrNull()
+        val cooldownUntil =
+            when {
+                remaining == "0" && reset != null -> Instant.ofEpochSecond(reset)
+                retryAfter != null -> Instant.now().plusSeconds(retryAfter)
+                remaining == "0" -> Instant.now().plusSeconds(DEFAULT_RATE_LIMIT_COOLDOWN_SECONDS)
+                else -> null
+            }
+        if (cooldownUntil != null) rateLimitState.limitedUntil = cooldownUntil
     }
 
     private fun decodeRepoInfo(body: String): RepoInfo? =

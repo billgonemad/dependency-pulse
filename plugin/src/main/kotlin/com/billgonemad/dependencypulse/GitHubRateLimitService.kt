@@ -2,16 +2,17 @@ package com.billgonemad.dependencypulse
 
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
-import java.util.concurrent.atomic.AtomicBoolean
+import java.time.Instant
+import java.util.concurrent.atomic.AtomicReference
 
 abstract class GitHubRateLimitService :
     BuildService<BuildServiceParameters.None>,
     RateLimitState {
-    private val limitedFlag = AtomicBoolean(false)
+    private val limitedUntilRef = AtomicReference<Instant?>(null)
 
-    override var limited: Boolean
-        get() = limitedFlag.get()
+    override var limitedUntil: Instant?
+        get() = limitedUntilRef.get()
         set(value) {
-            limitedFlag.set(value)
+            limitedUntilRef.set(value)
         }
 }

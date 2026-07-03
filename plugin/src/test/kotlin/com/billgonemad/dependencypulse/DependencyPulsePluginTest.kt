@@ -5,7 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
 class DependencyPulsePluginTest {
     @Test fun `plugin registers dependencyPulse task`() {
@@ -118,8 +118,12 @@ class DependencyPulsePluginTest {
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         val service = task.githubRateLimitService.get()
 
-        assertFalse(service.limited)
-        service.limited = true
-        assertTrue(service.limited)
+        assertNull(service.limitedUntil)
+        val until =
+            java.time.Instant
+                .now()
+                .plusSeconds(60)
+        service.limitedUntil = until
+        assertEquals(until, service.limitedUntil)
     }
 }
