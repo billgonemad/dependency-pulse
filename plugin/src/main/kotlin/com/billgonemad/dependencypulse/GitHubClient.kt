@@ -20,7 +20,7 @@ private const val HEADER_RETRY_AFTER = "Retry-After"
 
 open class GitHubClient(
     private val baseUrl: String = "https://api.github.com",
-    private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val httpClient: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
     private val token: String? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }

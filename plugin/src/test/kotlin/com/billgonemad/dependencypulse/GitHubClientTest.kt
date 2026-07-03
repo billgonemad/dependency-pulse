@@ -23,7 +23,6 @@ class GitHubClientTest {
         client =
             GitHubClient(
                 baseUrl = "http://${server.hostName}:${server.port}",
-                httpClient = HttpClient.newHttpClient(),
             )
     }
 
@@ -210,5 +209,24 @@ class GitHubClientTest {
 
         assertEquals(GitHubSignals.FetchFailed, first)
         assertIs<GitHubSignals.Found>(second)
+    }
+
+    @Test fun `follows redirects for renamed repos`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(301)
+                .setHeader("Location", "http://${server.hostName}:${server.port}/repos/new-owner/new-repo"),
+        )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        val result = client.fetchSignals("old-owner/old-repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
     }
 }
