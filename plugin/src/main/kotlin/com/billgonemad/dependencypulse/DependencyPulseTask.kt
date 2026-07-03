@@ -8,6 +8,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
+import java.net.http.HttpClient
 
 @DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
@@ -44,9 +45,16 @@ abstract class DependencyPulseTask : DefaultTask() {
 
     @TaskAction
     fun run() {
-        val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get(), retryDelayMs = retryDelayMs.get())
-        val pomClient = PomClient(baseUrl = pomBaseUrl.get())
-        val githubClient = GitHubClient(baseUrl = githubApiBaseUrl.get(), token = githubToken.orNull)
+        val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+        val client =
+            MavenCentralClient(
+                baseUrl = mavenCentralBaseUrl.get(),
+                httpClient = httpClient,
+                retryDelayMs = retryDelayMs.get(),
+            )
+        val pomClient = PomClient(baseUrl = pomBaseUrl.get(), httpClient = httpClient)
+        val githubClient =
+            GitHubClient(baseUrl = githubApiBaseUrl.get(), httpClient = httpClient, token = githubToken.orNull)
         val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(
