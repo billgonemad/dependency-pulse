@@ -23,19 +23,28 @@ private val RETRYABLE_CODES =
         HTTP_GATEWAY_TIMEOUT,
     )
 
-open class GitHubClient(
+internal interface RateLimitState {
+    var limited: Boolean
+
+    companion object {
+        fun local(): RateLimitState =
+            object : RateLimitState {
+                override var limited: Boolean = false
+            }
+    }
+}
+
+open class GitHubClient internal constructor(
     private val baseUrl: String = "https://api.github.com",
     private val httpClient: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
     private val token: String? = null,
     private val retryDelayMs: Long = 1_000L,
+    private val rateLimitState: RateLimitState = RateLimitState.local(),
 ) {
-    @Volatile
-    private var rateLimited = false
-
     open fun fetchSignals(ownerRepo: String): GitHubSignals {
         val repoInfo =
             fetchRepoInfo(ownerRepo)
-                ?: return if (rateLimited) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
+                ?: return if (rateLimitState.limited) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
         val lastCommitDate = fetchLastCommitDate(ownerRepo) ?: repoInfo.pushedAt
         return GitHubSignals.Found(lastCommitDate, repoInfo.archived)
     }
@@ -51,7 +60,7 @@ open class GitHubClient(
     }
 
     private fun get(url: String): HttpResponse<String>? {
-        if (rateLimited) return null
+        if (rateLimitState.limited) return null
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
@@ -73,7 +82,7 @@ open class GitHubClient(
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
         val retryAfter = response.headers().firstValue(HEADER_RETRY_AFTER).orElse(null)
-        if (remaining == "0" || retryAfter != null) rateLimited = true
+        if (remaining == "0" || retryAfter != null) rateLimitState.limited = true
     }
 
     private fun decodeRepoInfo(body: String): RepoInfo? =

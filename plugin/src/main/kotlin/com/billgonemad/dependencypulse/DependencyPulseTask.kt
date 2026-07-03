@@ -5,6 +5,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.work.DisableCachingByDefault
@@ -43,6 +44,9 @@ abstract class DependencyPulseTask : DefaultTask() {
     @get:Optional
     abstract val githubToken: Property<String>
 
+    @get:Internal
+    abstract val githubRateLimitService: Property<GitHubRateLimitService>
+
     @TaskAction
     fun run() {
         val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
@@ -54,7 +58,12 @@ abstract class DependencyPulseTask : DefaultTask() {
             )
         val pomClient = PomClient(baseUrl = pomBaseUrl.get(), httpClient = httpClient)
         val githubClient =
-            GitHubClient(baseUrl = githubApiBaseUrl.get(), httpClient = httpClient, token = githubToken.orNull)
+            GitHubClient(
+                baseUrl = githubApiBaseUrl.get(),
+                httpClient = httpClient,
+                token = githubToken.orNull,
+                rateLimitState = githubRateLimitService.get(),
+            )
         val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(

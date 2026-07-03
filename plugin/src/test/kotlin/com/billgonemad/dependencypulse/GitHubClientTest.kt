@@ -11,6 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GitHubClientTest {
     private lateinit var server: MockWebServer
@@ -279,5 +280,32 @@ class GitHubClientTest {
 
         assertIs<GitHubSignals.Found>(result)
         assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
+    }
+
+    @Test fun `two clients sharing the same RateLimitState both see a rate limit tripped by either`() {
+        val sharedState = RateLimitState.local()
+        val clientA =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                rateLimitState = sharedState,
+            )
+        val clientB =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = HttpClient.newHttpClient(),
+                rateLimitState = sharedState,
+            )
+        server.enqueue(
+            MockResponse().setResponseCode(403).setHeader("X-RateLimit-Remaining", "0"),
+        )
+
+        val fromA = clientA.fetchSignals("owner/repo")
+        val fromB = clientB.fetchSignals("another/repo")
+
+        assertEquals(GitHubSignals.RateLimited, fromA)
+        assertEquals(GitHubSignals.RateLimited, fromB)
+        assertEquals(1, server.requestCount)
+        assertTrue(sharedState.limited)
     }
 }

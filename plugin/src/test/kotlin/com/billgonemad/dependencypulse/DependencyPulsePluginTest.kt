@@ -5,6 +5,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 class DependencyPulsePluginTest {
     @Test fun `plugin registers dependencyPulse task`() {
@@ -108,5 +109,17 @@ class DependencyPulsePluginTest {
             System.clearProperty("pomBaseUrl")
             System.clearProperty("githubApiBaseUrl")
         }
+    }
+
+    @Test fun `githubRateLimitService resolves to a usable shared instance`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        val service = task.githubRateLimitService.get()
+
+        assertFalse(service.limited)
+        service.limited = true
+        assertTrue(service.limited)
     }
 }

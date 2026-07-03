@@ -23,6 +23,12 @@ class DependencyPulsePlugin : Plugin<Project> {
         ext.thresholds.yellowAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_YELLOW_AFTER_MONTHS)
         ext.thresholds.redAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_RED_AFTER_MONTHS)
 
+        val rateLimitService =
+            project.gradle.sharedServices.registerIfAbsent(
+                "githubRateLimitService",
+                GitHubRateLimitService::class.java,
+            ) {}
+
         project.tasks.register("dependencyPulse", DependencyPulseTask::class.java) { task ->
             task.mavenCentralBaseUrl.set(
                 project.providers
@@ -51,6 +57,8 @@ class DependencyPulsePlugin : Plugin<Project> {
             task.yellowAfterMonths.set(ext.thresholds.yellowAfterMonths)
             task.redAfterMonths.set(ext.thresholds.redAfterMonths)
             task.githubToken.set(ext.githubToken)
+            task.githubRateLimitService.set(rateLimitService)
+            task.usesService(rateLimitService)
         }
 
         project.afterEvaluate {
