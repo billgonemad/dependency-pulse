@@ -29,6 +29,16 @@ class DependencyPulsePlugin : Plugin<Project> {
                     .systemProperty("mavenCentralBaseUrl")
                     .orElse("https://search.maven.org"),
             )
+            task.pomBaseUrl.set(
+                project.providers
+                    .systemProperty("pomBaseUrl")
+                    .orElse("https://repo1.maven.org/maven2"),
+            )
+            task.githubApiBaseUrl.set(
+                project.providers
+                    .systemProperty("githubApiBaseUrl")
+                    .orElse("https://api.github.com"),
+            )
             task.retryDelayMs.set(
                 project.providers
                     .systemProperty("mavenCentralRetryDelayMs")

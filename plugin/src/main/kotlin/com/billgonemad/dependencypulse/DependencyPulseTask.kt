@@ -30,6 +30,12 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val mavenCentralBaseUrl: Property<String>
 
     @get:Input
+    abstract val pomBaseUrl: Property<String>
+
+    @get:Input
+    abstract val githubApiBaseUrl: Property<String>
+
+    @get:Input
     abstract val retryDelayMs: Property<Long>
 
     @get:Input
@@ -39,8 +45,8 @@ abstract class DependencyPulseTask : DefaultTask() {
     @TaskAction
     fun run() {
         val client = MavenCentralClient(baseUrl = mavenCentralBaseUrl.get(), retryDelayMs = retryDelayMs.get())
-        val pomClient = PomClient()
-        val githubClient = GitHubClient(token = githubToken.orNull)
+        val pomClient = PomClient(baseUrl = pomBaseUrl.get())
+        val githubClient = GitHubClient(baseUrl = githubApiBaseUrl.get(), token = githubToken.orNull)
         val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(

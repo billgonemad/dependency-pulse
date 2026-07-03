@@ -85,4 +85,28 @@ class DependencyPulsePluginTest {
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals("my-token", task.githubToken.get())
     }
+
+    @Test fun `pomBaseUrl and githubApiBaseUrl default to the real APIs`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+        assertEquals("https://repo1.maven.org/maven2", task.pomBaseUrl.get())
+        assertEquals("https://api.github.com", task.githubApiBaseUrl.get())
+    }
+
+    @Test fun `pomBaseUrl and githubApiBaseUrl can be overridden via system property`() {
+        System.setProperty("pomBaseUrl", "http://localhost:8081")
+        System.setProperty("githubApiBaseUrl", "http://localhost:8082")
+        try {
+            val project = ProjectBuilder.builder().build()
+            project.plugins.apply("com.billgonemad.dependency-pulse")
+            val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+            assertEquals("http://localhost:8081", task.pomBaseUrl.get())
+            assertEquals("http://localhost:8082", task.githubApiBaseUrl.get())
+        } finally {
+            System.clearProperty("pomBaseUrl")
+            System.clearProperty("githubApiBaseUrl")
+        }
+    }
 }
