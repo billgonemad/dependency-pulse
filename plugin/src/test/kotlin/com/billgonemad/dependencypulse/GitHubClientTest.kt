@@ -2,7 +2,10 @@ package com.billgonemad.dependencypulse
 
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.io.IOException
 import java.net.http.HttpClient
+import java.net.http.HttpRequest
+import java.net.http.HttpResponse
 import java.time.Instant
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -308,4 +311,76 @@ class GitHubClientTest {
         assertEquals(1, server.requestCount)
         assertTrue(sharedState.limited)
     }
+
+    @Test fun `retries a connection-level failure before falling back`() {
+        val flakyHttpClient = FlakyHttpClient(HttpClient.newHttpClient(), failuresRemaining = 1)
+        client =
+            GitHubClient(
+                baseUrl = "http://${server.hostName}:${server.port}",
+                httpClient = flakyHttpClient,
+                retryDelayMs = 0L,
+            )
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(
+            MockResponse().setBody("""[{"commit":{"committer":{"date":"2024-03-20T08:30:00Z"}}}]"""),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `does not retry a malformed-uri failure`() {
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo with spaces"))
+        assertEquals(0, server.requestCount)
+    }
+}
+
+private class FlakyHttpClient(
+    private val delegate: HttpClient,
+    private var failuresRemaining: Int,
+) : HttpClient() {
+    override fun cookieHandler() = delegate.cookieHandler()
+
+    override fun connectTimeout() = delegate.connectTimeout()
+
+    override fun followRedirects(): HttpClient.Redirect = delegate.followRedirects()
+
+    override fun proxy() = delegate.proxy()
+
+    override fun sslContext() = delegate.sslContext()
+
+    override fun sslParameters() = delegate.sslParameters()
+
+    override fun authenticator() = delegate.authenticator()
+
+    override fun version(): HttpClient.Version = delegate.version()
+
+    override fun executor() = delegate.executor()
+
+    override fun <T : Any?> send(
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler<T>,
+    ): HttpResponse<T> {
+        if (failuresRemaining > 0) {
+            failuresRemaining--
+            throw IOException("simulated connection failure")
+        }
+        return delegate.send(request, responseBodyHandler)
+    }
+
+    override fun <T : Any?> sendAsync(
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler<T>,
+    ) = delegate.sendAsync(request, responseBodyHandler)
+
+    override fun <T : Any?> sendAsync(
+        request: HttpRequest,
+        responseBodyHandler: HttpResponse.BodyHandler<T>,
+        pushPromiseHandler: HttpResponse.PushPromiseHandler<T>?,
+    ) = delegate.sendAsync(request, responseBodyHandler, pushPromiseHandler)
 }

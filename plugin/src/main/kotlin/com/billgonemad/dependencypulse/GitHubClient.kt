@@ -65,14 +65,17 @@ open class GitHubClient internal constructor(
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
-            val response =
+            val outcome =
                 safeGet(httpClient, url) {
                     if (token != null) header("Authorization", "Bearer $token")
                 }
+            val response = outcome.orNull()
             val statusCode = response?.statusCode()
             if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
             result = response
-            val canRetry = statusCode != null && statusCode in RETRYABLE_CODES && attempt < MAX_RETRIES
+            val networkRetryable = outcome is SafeGetResult.Failure && outcome.retryable
+            val statusRetryable = statusCode != null && statusCode in RETRYABLE_CODES
+            val canRetry = (networkRetryable || statusRetryable) && attempt < MAX_RETRIES
             if (!canRetry) break
             Thread.sleep(retryDelayMs * (1L shl attempt))
             attempt++

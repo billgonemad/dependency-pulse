@@ -13,11 +13,23 @@ internal const val DEFAULT_HTTP_TIMEOUT_SECONDS = 10L
 
 internal val DEFAULT_JSON = Json { ignoreUnknownKeys = true }
 
+internal sealed class SafeGetResult {
+    data class Success(
+        val response: HttpResponse<String>,
+    ) : SafeGetResult()
+
+    data class Failure(
+        val retryable: Boolean,
+    ) : SafeGetResult()
+}
+
+internal fun SafeGetResult.orNull(): HttpResponse<String>? = (this as? SafeGetResult.Success)?.response
+
 internal fun safeGet(
     httpClient: HttpClient,
     url: String,
     configureRequest: HttpRequest.Builder.() -> Unit = {},
-): HttpResponse<String>? =
+): SafeGetResult =
     try {
         val requestBuilder =
             HttpRequest
@@ -26,12 +38,12 @@ internal fun safeGet(
                 .timeout(Duration.ofSeconds(DEFAULT_HTTP_TIMEOUT_SECONDS))
                 .GET()
         requestBuilder.configureRequest()
-        httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString())
+        SafeGetResult.Success(httpClient.send(requestBuilder.build(), HttpResponse.BodyHandlers.ofString()))
     } catch (ignored: IllegalArgumentException) {
-        null
+        SafeGetResult.Failure(retryable = false)
     } catch (ignored: IOException) {
-        null
+        SafeGetResult.Failure(retryable = true)
     } catch (ignored: InterruptedException) {
         Thread.currentThread().interrupt()
-        null
+        SafeGetResult.Failure(retryable = false)
     }

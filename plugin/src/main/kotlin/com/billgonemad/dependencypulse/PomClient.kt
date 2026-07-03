@@ -43,7 +43,7 @@ open class PomClient(
         version: String,
     ): String? {
         val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        val response = safeGet(httpClient, "$baseUrl/$path") ?: return null
+        val response = safeGet(httpClient, "$baseUrl/$path").orNull() ?: return null
         return if (response.statusCode() == HTTP_OK) response.body() else null
     }
 
