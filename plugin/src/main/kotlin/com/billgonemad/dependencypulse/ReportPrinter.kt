@@ -22,6 +22,7 @@ object ReportPrinter {
                 }
             println("$emoji ${dep.group}:${dep.artifact}:${dep.currentVersion}")
             printDetailLine(dep, now)
+            printGithubLine(dep, now)
             println()
         }
         println("=======================")
@@ -54,6 +55,24 @@ object ReportPrinter {
                 } else {
                     println("   No Maven Central data available")
                 }
+            }
+        }
+    }
+
+    private fun printGithubLine(
+        dep: DependencyInfo,
+        now: Instant,
+    ) {
+        val signals = dep.githubSignals
+        if (signals !is GitHubSignals.Found) return
+        when {
+            signals.isArchived -> {
+                println("   GitHub: Repo archived")
+            }
+
+            signals.lastCommitDate != null -> {
+                val months = monthsAgo(signals.lastCommitDate, now)
+                println("   GitHub: Last commit $months months ago")
             }
         }
     }
