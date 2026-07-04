@@ -78,7 +78,7 @@ class DependencyAnalyzer(
                 mavenSignals = signals,
                 githubSignals = githubSignals,
                 javaxBlocker = false,
-                status = score(signals, yellowAfterMonths, redAfterMonths),
+                status = score(signals, githubSignals, yellowAfterMonths, redAfterMonths),
                 errorMessage = null,
             )
         } catch (

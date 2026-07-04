@@ -5,6 +5,7 @@ import java.io.PrintStream
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.test.Test
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class ReportPrinterTest {
@@ -28,12 +29,13 @@ class ReportPrinterTest {
         signals: MavenSignals? = null,
         status: DepStatus = DepStatus.GREEN,
         errorMessage: String? = null,
+        githubSignals: GitHubSignals = GitHubSignals.NoRepo,
     ) = DependencyInfo(
         group = group,
         artifact = artifact,
         currentVersion = version,
         mavenSignals = signals,
-        githubSignals = GitHubSignals.NoRepo,
+        githubSignals = githubSignals,
         javaxBlocker = false,
         status = status,
         errorMessage = errorMessage,
@@ -90,5 +92,56 @@ class ReportPrinterTest {
         assertTrue(output.contains("1 yellow"))
         assertTrue(output.contains("1 green"))
         assertTrue(output.contains("1 unknown"))
+    }
+
+    @Test fun `archived GitHub repo shows GitHub archived line`() {
+        val depList =
+            listOf(
+                dep(
+                    status = DepStatus.RED,
+                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+                ),
+            )
+        val output = capture { ReportPrinter.print(depList) }
+        assertTrue(output.contains("GitHub: Repo archived"))
+    }
+
+    @Test fun `stale GitHub commit shows last-commit-months-ago line`() {
+        val now = Instant.now()
+        val old = now.minus(420, ChronoUnit.DAYS)
+        val depList =
+            listOf(
+                dep(
+                    status = DepStatus.YELLOW,
+                    githubSignals = GitHubSignals.Found(lastCommitDate = old, isArchived = false),
+                ),
+            )
+        val output = capture { ReportPrinter.print(depList, now = now) }
+        assertTrue(output.contains("GitHub: Last commit 14 months ago"))
+    }
+
+    @Test fun `NoRepo GitHub signal shows no GitHub line`() {
+        val depList = listOf(dep(githubSignals = GitHubSignals.NoRepo))
+        val output = capture { ReportPrinter.print(depList) }
+        assertFalse(output.contains("GitHub:"))
+    }
+
+    @Test fun `RateLimited GitHub signal shows no GitHub line`() {
+        val depList = listOf(dep(githubSignals = GitHubSignals.RateLimited))
+        val output = capture { ReportPrinter.print(depList) }
+        assertFalse(output.contains("GitHub:"))
+    }
+
+    @Test fun `FetchFailed GitHub signal shows no GitHub line`() {
+        val depList = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
+        val output = capture { ReportPrinter.print(depList) }
+        assertFalse(output.contains("GitHub:"))
+    }
+
+    @Test fun `Found with null lastCommitDate and not archived shows no GitHub line`() {
+        val depList =
+            listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
+        val output = capture { ReportPrinter.print(depList) }
+        assertFalse(output.contains("GitHub:"))
     }
 }
