@@ -155,4 +155,33 @@ class MavenCentralClientTest {
         assertNotNull(result)
         assertEquals("4.12.0", result.latestVersion)
     }
+
+    @Test fun `tolerates central sonatype com's response shape (ec collapsed, tags field absent)`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """{
+                    "responseHeader": {"params": {"sort": ""}},
+                    "response": {
+                        "numFound": 290,
+                        "docs": [
+                            {
+                                "id": "org.springframework.boot:spring-boot-cli:4.1.0",
+                                "g": "org.springframework.boot",
+                                "a": "spring-boot-cli",
+                                "v": "4.1.0",
+                                "p": "jar",
+                                "timestamp": 1749556800000,
+                                "ec": ["jar"]
+                            }
+                        ]
+                    }
+                }""",
+            ),
+        )
+
+        val result = client.fetchSignals("org.springframework.boot", "spring-boot-cli", "3.5.15")
+
+        assertNotNull(result)
+        assertEquals("4.1.0", result.latestVersion)
+    }
 }

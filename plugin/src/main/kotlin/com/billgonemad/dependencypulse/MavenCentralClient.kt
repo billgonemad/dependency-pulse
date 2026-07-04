@@ -32,7 +32,7 @@ private val RETRYABLE_CODES =
     )
 
 open class MavenCentralClient(
-    private val baseUrl: String = "https://search.maven.org",
+    private val baseUrl: String = "https://central.sonatype.com",
     private val httpClient: HttpClient = HttpClient.newBuilder().build(),
     private val retryDelayMs: Long = 1_000L,
 ) {
