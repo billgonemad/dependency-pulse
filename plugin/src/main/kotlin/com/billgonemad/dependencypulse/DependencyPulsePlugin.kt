@@ -33,7 +33,7 @@ class DependencyPulsePlugin : Plugin<Project> {
             task.mavenCentralBaseUrl.set(
                 project.providers
                     .systemProperty("mavenCentralBaseUrl")
-                    .orElse("https://search.maven.org"),
+                    .orElse("https://central.sonatype.com"),
             )
             task.pomBaseUrl.set(
                 project.providers

@@ -50,7 +50,7 @@ class DependencyPulsePluginTest {
         assertEquals(listOf("compileClasspath"), task.ignoreConfigurations.get())
         assertEquals(6, task.yellowAfterMonths.get())
         assertEquals(18, task.redAfterMonths.get())
-        assertEquals("https://search.maven.org", task.mavenCentralBaseUrl.get())
+        assertEquals("https://central.sonatype.com", task.mavenCentralBaseUrl.get())
     }
 
     @Test fun `mavenCentralBaseUrl can be overridden via system property`() {
