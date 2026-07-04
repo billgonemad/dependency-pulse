@@ -4,10 +4,12 @@
 [![Release](https://img.shields.io/github/v/release/billgonemad/dependency-pulse)](https://github.com/billgonemad/dependency-pulse/releases)
 
 A Gradle plugin that checks how stale your JVM dependencies are.
-It queries Maven Central for each dependency's latest release date and
-classifies them as green (active), yellow (aging), or red (abandoned/gone).
-Run it as part of your build or on demand to catch forgotten dependencies
-before they become a maintenance problem.
+It queries Maven Central for each dependency's latest release date, and — when
+the dependency's GitHub repository can be resolved — also checks whether that
+repo is archived or has gone quiet. It classifies each dependency as green
+(active), yellow (aging), or red (abandoned/gone). Run it as part of your
+build or on demand to catch forgotten dependencies before they become a
+maintenance problem.
 
 ## Sample Output
 
@@ -18,8 +20,10 @@ Dependency Pulse Report
    Latest: 4.12.0 | Released: 3 months ago | Active
 ⚠️  org.apache.commons:commons-lang3:3.12.0
    Latest: 3.14.0 | Released: 15 months ago
+   GitHub: Last commit 14 months ago
 🔴 io.abandoned:legacy-lib:1.0.0
    Artifact no longer published to Maven Central
+   GitHub: Repo archived
 ❓ com.flaky:unreachable-lib:2.0.0
    Maven Central unavailable — skipped (set failOnError=true to fail the build)
 =======================
@@ -105,6 +109,7 @@ dependencyPulse {
         "testCompileClasspath",
         "testRuntimeClasspath",
     )
+    githubToken = null          // GitHub token to raise the API rate limit (60/hr -> 5,000/hr)
     thresholds {
         yellowAfterMonths = 12  // months since last release before YELLOW
         redAfterMonths = 24     // months since last release before RED
@@ -113,6 +118,16 @@ dependencyPulse {
 ```
 
 All fields are optional. The values shown above are the defaults.
+
+`githubToken` is only needed if you're scanning enough dependencies to hit GitHub's
+unauthenticated rate limit (60 requests/hour). A token with no special scopes —
+just read access to public repos — is enough:
+
+```kotlin
+dependencyPulse {
+    githubToken = System.getenv("GITHUB_TOKEN") // or providers.gradleProperty("githubToken")
+}
+```
 
 Run the task with:
 
@@ -146,6 +161,21 @@ for the artifact's latest release date. It then classifies the dependency:
 | ❓ Unknown | Maven Central could not be reached |
 
 Thresholds are configurable. Test configurations are excluded by default.
+
+### GitHub signals
+
+When a dependency's POM links to a GitHub repository, the plugin also checks
+that repo's health and folds it into the same status — whichever of the Maven
+Central result and the GitHub result is worse wins:
+
+- An **archived** repository always forces 🔴 Red, regardless of how recently
+  the artifact itself was released.
+- A **stale last commit** (older than the same `yellowAfterMonths` /
+  `redAfterMonths` thresholds used for Maven releases) can downgrade an
+  otherwise-Green dependency to Yellow or Red.
+- If the repo can't be resolved, GitHub rate-limits the request, or the
+  lookup fails, the dependency's status is unaffected — it's scored on Maven
+  Central data alone, exactly as if GitHub signals weren't checked at all.
 
 ## License
 
