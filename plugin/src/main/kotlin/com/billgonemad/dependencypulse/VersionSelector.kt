@@ -2,11 +2,6 @@
 
 package com.billgonemad.dependencypulse
 
-internal data class VersionEntry(
-    val version: String,
-    val timestamp: Long,
-)
-
 private val PRE_RELEASE_QUALIFIERS =
     setOf("alpha", "beta", "rc", "cr", "m", "milestone", "snapshot", "preview", "dev", "eap", "pre")
 
@@ -25,20 +20,24 @@ internal fun isPreRelease(version: String): Boolean =
     }
 
 /**
- * Picks the version to treat as "latest":
- * - if [currentVersion] is itself a pre-release, the newest version of any kind;
- * - otherwise the newest stable version, falling back to the newest pre-release
- *   when no stable version exists.
- * Newest is by [VersionEntry.timestamp]. Returns null for an empty list.
+ * Picks the version to treat as "latest" from a maven-metadata.xml-derived
+ * [orderedVersions] list (oldest to newest, per Maven's deploy-time append
+ * convention) and the metadata's own [latest] tag (newest of any kind,
+ * including pre-releases):
+ * - if [currentVersion] is itself a pre-release, [latest] itself;
+ * - otherwise the newest stable version (scanning [orderedVersions] from the
+ *   end), falling back to [latest] when no stable version exists.
+ * Returns null if [orderedVersions] is empty.
  */
-internal fun selectLatest(
-    versions: List<VersionEntry>,
+internal fun selectLatestVersion(
+    latest: String,
+    orderedVersions: List<String>,
     currentVersion: String,
-): VersionEntry? =
-    versions.maxByOrNull { it.timestamp }?.let { newestOverall ->
-        if (isPreRelease(currentVersion)) {
-            newestOverall
-        } else {
-            versions.filterNot { isPreRelease(it.version) }.maxByOrNull { it.timestamp } ?: newestOverall
-        }
+): String? =
+    if (orderedVersions.isEmpty()) {
+        null
+    } else if (isPreRelease(currentVersion)) {
+        latest
+    } else {
+        orderedVersions.lastOrNull { !isPreRelease(it) } ?: latest
     }

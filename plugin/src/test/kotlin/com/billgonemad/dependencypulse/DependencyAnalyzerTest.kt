@@ -13,8 +13,8 @@ class DependencyAnalyzerTest {
     private val now = Instant.now()
     private val greenSignals = MavenSignals("1.0", now)
 
-    private fun stubClient(signals: MavenSignals?): MavenCentralClient =
-        object : MavenCentralClient() {
+    private fun stubClient(signals: MavenSignals?): MavenMetadataClient =
+        object : MavenMetadataClient() {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
@@ -22,8 +22,8 @@ class DependencyAnalyzerTest {
             ) = signals
         }
 
-    private fun throwingClient(): MavenCentralClient =
-        object : MavenCentralClient() {
+    private fun throwingClient(): MavenMetadataClient =
+        object : MavenMetadataClient() {
             override fun fetchSignals(
                 group: String,
                 artifact: String,
@@ -182,7 +182,7 @@ class DependencyAnalyzerTest {
     @Test fun `resolves multiple dependencies concurrently rather than strictly sequentially`() {
         val delayMs = 200L
         val slowClient =
-            object : MavenCentralClient() {
+            object : MavenMetadataClient() {
                 override fun fetchSignals(
                     group: String,
                     artifact: String,
