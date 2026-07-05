@@ -150,8 +150,9 @@ dependencyPulse {
 
 ## How it works
 
-For each resolved dependency, the plugin queries the Maven Central search API
-for the artifact's latest release date. It then classifies the dependency:
+For each resolved dependency, the plugin queries Maven Central for the
+artifact's version metadata and latest release date. It then classifies the
+dependency:
 
 | Status | Condition |
 |--------|-----------|
