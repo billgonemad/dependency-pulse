@@ -41,9 +41,9 @@ open class MavenMetadataClient(
         currentVersion: String,
     ): MavenSignals? {
         val metadata = fetchMetadata(group, artifact) ?: return null
-        val selected = selectLatestVersion(metadata.latest, metadata.orderedVersions, currentVersion) ?: return null
-        val releaseDate = fetchLastModified(group, artifact, selected)
-        return MavenSignals(latestVersion = selected, latestReleaseDate = releaseDate)
+        return selectLatestVersion(metadata.latest, metadata.orderedVersions, currentVersion)?.let { selected ->
+            MavenSignals(latestVersion = selected, latestReleaseDate = fetchLastModified(group, artifact, selected))
+        }
     }
 
     private fun fetchMetadata(
@@ -101,15 +101,17 @@ open class MavenMetadataClient(
         url: String,
     ): ArtifactMetadata {
         val document = parseXml(xml) ?: throw IOException("Malformed maven-metadata.xml from $url")
-        val versioning =
-            firstChildElement(document.documentElement, "versioning")
-                ?: throw IOException("Missing <versioning> in maven-metadata.xml from $url")
-        val latest =
-            firstChildText(versioning, "latest")
-                ?: throw IOException("Missing <latest> in maven-metadata.xml from $url")
+        val versioning = requireChild(firstChildElement(document.documentElement, "versioning"), "versioning", url)
+        val latest = requireChild(firstChildText(versioning, "latest"), "latest", url)
         val versions = firstChildElement(versioning, "versions")?.let { allChildText(it, "version") } ?: emptyList()
         return ArtifactMetadata(latest, versions)
     }
+
+    private fun <T> requireChild(
+        value: T?,
+        tagName: String,
+        url: String,
+    ): T = value ?: throw IOException("Missing <$tagName> in maven-metadata.xml from $url")
 
     private fun parseXml(xml: String): Document? =
         try {
@@ -151,7 +153,10 @@ open class MavenMetadataClient(
         for (i in 0 until children.length) {
             val node = children.item(i)
             if (node is Element && node.tagName == tagName) {
-                node.textContent?.trim()?.takeIf { it.isNotEmpty() }?.let { result.add(it) }
+                node.textContent
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { result.add(it) }
             }
         }
         return result

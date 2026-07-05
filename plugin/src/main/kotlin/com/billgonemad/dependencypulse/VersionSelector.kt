@@ -33,8 +33,11 @@ internal fun selectLatestVersion(
     latest: String,
     orderedVersions: List<String>,
     currentVersion: String,
-): String? {
-    if (orderedVersions.isEmpty()) return null
-    if (isPreRelease(currentVersion)) return latest
-    return orderedVersions.lastOrNull { !isPreRelease(it) } ?: latest
-}
+): String? =
+    if (orderedVersions.isEmpty()) {
+        null
+    } else if (isPreRelease(currentVersion)) {
+        latest
+    } else {
+        orderedVersions.lastOrNull { !isPreRelease(it) } ?: latest
+    }
