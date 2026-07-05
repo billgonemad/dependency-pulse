@@ -10,6 +10,9 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
+import java.time.Instant
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -28,16 +31,30 @@ class DependencyPulsePluginFunctionalTest {
 
     private lateinit var server: MockWebServer
 
-    private val latestJson =
-        """{"response":{"numFound":1,"docs":[{"latestVersion":"2.0.16","timestamp":1722729600000}]}}"""
+    private fun mavenDispatcher(
+        latestVersion: String,
+        lastModifiedEpochMs: Long,
+    ): Dispatcher =
+        object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path?.endsWith("maven-metadata.xml") == true) {
+                    MockResponse().setBody(
+                        "<metadata><versioning><latest>$latestVersion</latest>" +
+                            "<versions><version>$latestVersion</version></versions></versioning></metadata>",
+                    )
+                } else {
+                    val httpDate =
+                        DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                            Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
+                        )
+                    MockResponse().setBody("<project></project>").setHeader("Last-Modified", httpDate)
+                }
+        }
 
     @BeforeEach
     fun setUp() {
         server = MockWebServer()
-        server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody(latestJson)
-            }
+        server.dispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis())
         server.start()
     }
 
@@ -68,7 +85,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
@@ -110,7 +126,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "-DmavenCentralRetryDelayMs=0",
@@ -145,7 +160,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "check",
@@ -179,7 +193,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "check",
@@ -190,13 +203,7 @@ class DependencyPulsePluginFunctionalTest {
 
     @Test fun `failOnRed causes build failure when latest release is stale`() {
         val threeYearsAgo = System.currentTimeMillis() - THREE_YEARS_MS
-        val redJson =
-            """{"response":{"numFound":1,"docs":[{"latestVersion":"0.1","timestamp":$threeYearsAgo}]}}"""
-
-        server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody(redJson)
-            }
+        server.dispatcher = mavenDispatcher("0.1", threeYearsAgo)
 
         settingsFile.writeText("rootProject.name = 'test-project'")
         buildFile.writeText(
@@ -222,7 +229,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DmavenCentralBaseUrl=http://${server.hostName}:${server.port}",
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
