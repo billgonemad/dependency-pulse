@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.0](https://github.com/billgonemad/dependency-pulse/compare/v0.4.0...v0.5.0) (2026-07-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* mavenCentralBaseUrl (task property and -DmavenCentralBaseUrl system property) is removed. pomBaseUrl is now the single configurable host for both POM and version-signal fetches.
+
+### Features
+
+* Replace solrsearch with maven-metadata.xml + POM Last-Modified ([f93ca57](https://github.com/billgonemad/dependency-pulse/commit/f93ca57157d9d5f701cd6451c7ebfaa9df4bec92))
+
 ## [0.4.0](https://github.com/billgonemad/dependency-pulse/compare/v0.3.0...v0.4.0) (2026-07-04)
 
 
