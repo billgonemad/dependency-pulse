@@ -42,3 +42,23 @@ internal fun selectLatest(
             versions.filterNot { isPreRelease(it.version) }.maxByOrNull { it.timestamp } ?: newestOverall
         }
     }
+
+/**
+ * Picks the version to treat as "latest" from a maven-metadata.xml-derived
+ * [orderedVersions] list (oldest to newest, per Maven's deploy-time append
+ * convention) and the metadata's own [latest] tag (newest of any kind,
+ * including pre-releases):
+ * - if [currentVersion] is itself a pre-release, [latest] itself;
+ * - otherwise the newest stable version (scanning [orderedVersions] from the
+ *   end), falling back to [latest] when no stable version exists.
+ * Returns null if [orderedVersions] is empty.
+ */
+internal fun selectLatestVersion(
+    latest: String,
+    orderedVersions: List<String>,
+    currentVersion: String,
+): String? {
+    if (orderedVersions.isEmpty()) return null
+    if (isPreRelease(currentVersion)) return latest
+    return orderedVersions.lastOrNull { !isPreRelease(it) } ?: latest
+}

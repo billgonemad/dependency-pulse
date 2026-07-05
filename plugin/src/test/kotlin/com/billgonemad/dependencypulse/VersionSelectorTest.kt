@@ -61,4 +61,24 @@ class VersionSelectorTest {
     @Test fun `returns null for empty version list`() {
         assertNull(selectLatest(emptyList(), "1.0.0"))
     }
+
+    @Test fun `selectLatestVersion selects newest stable over a newer pre-release`() {
+        // okhttp scenario: 5.0.0-alpha.16 is newest overall, but 4.12.0 is newest stable.
+        val ordered = listOf("4.11.0", "4.12.0", "5.0.0-alpha.16")
+        assertEquals("4.12.0", selectLatestVersion("5.0.0-alpha.16", ordered, "4.12.0"))
+    }
+
+    @Test fun `selectLatestVersion includes pre-releases when current version is a pre-release`() {
+        val ordered = listOf("4.12.0", "5.0.0-alpha.16")
+        assertEquals("5.0.0-alpha.16", selectLatestVersion("5.0.0-alpha.16", ordered, "5.0.0-alpha.14"))
+    }
+
+    @Test fun `selectLatestVersion falls back to newest pre-release when no stable exists`() {
+        val ordered = listOf("1.0.0-alpha.1", "1.0.0-alpha.2")
+        assertEquals("1.0.0-alpha.2", selectLatestVersion("1.0.0-alpha.2", ordered, "1.0.0"))
+    }
+
+    @Test fun `selectLatestVersion returns null for empty version list`() {
+        assertNull(selectLatestVersion("1.0.0", emptyList(), "1.0.0"))
+    }
 }
