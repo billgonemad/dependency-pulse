@@ -30,11 +30,6 @@ class DependencyPulsePlugin : Plugin<Project> {
             ) {}
 
         project.tasks.register("dependencyPulse", DependencyPulseTask::class.java) { task ->
-            task.mavenCentralBaseUrl.set(
-                project.providers
-                    .systemProperty("mavenCentralBaseUrl")
-                    .orElse("https://central.sonatype.com"),
-            )
             task.pomBaseUrl.set(
                 project.providers
                     .systemProperty("pomBaseUrl")

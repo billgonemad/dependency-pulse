@@ -30,14 +30,14 @@ private fun defaultResolver(
         }.toSet()
 
 class DependencyAnalyzer(
-    private val client: MavenCentralClient,
+    private val client: MavenMetadataClient,
     private val pomClient: PomClient,
     private val githubClient: GitHubClient,
 ) {
     private var resolver: Resolver = ::defaultResolver
 
     internal constructor(
-        client: MavenCentralClient,
+        client: MavenMetadataClient,
         pomClient: PomClient,
         githubClient: GitHubClient,
         resolver: Resolver,

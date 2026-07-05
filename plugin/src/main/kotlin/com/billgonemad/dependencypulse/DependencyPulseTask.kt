@@ -29,9 +29,6 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val redAfterMonths: Property<Int>
 
     @get:Input
-    abstract val mavenCentralBaseUrl: Property<String>
-
-    @get:Input
     abstract val pomBaseUrl: Property<String>
 
     @get:Input
@@ -51,8 +48,8 @@ abstract class DependencyPulseTask : DefaultTask() {
     fun run() {
         val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
         val client =
-            MavenCentralClient(
-                baseUrl = mavenCentralBaseUrl.get(),
+            MavenMetadataClient(
+                baseUrl = pomBaseUrl.get(),
                 httpClient = httpClient,
                 retryDelayMs = retryDelayMs.get(),
             )
