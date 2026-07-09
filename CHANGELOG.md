@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/billgonemad/dependency-pulse/compare/v0.5.0...v0.5.1) (2026-07-09)
+
+
+### Bug Fixes
+
+* **maven-metadata:** derive latest version when &lt;latest&gt; tag is absent ([8260955](https://github.com/billgonemad/dependency-pulse/commit/82609558eda4f6e0e4cac76c630cb1f3c5ea85eb)), closes [#58](https://github.com/billgonemad/dependency-pulse/issues/58)
+
 ## [0.5.0](https://github.com/billgonemad/dependency-pulse/compare/v0.4.0...v0.5.0) (2026-07-05)
 
 
