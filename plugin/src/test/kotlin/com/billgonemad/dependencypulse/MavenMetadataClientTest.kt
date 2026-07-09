@@ -183,6 +183,32 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("4.12.0", result.latestVersion)
     }
+
+    @Test fun `derives latest from last version when latest tag is absent`() {
+        server.enqueue(
+            MockResponse().setBody(
+                "<metadata><versioning><versions><version>2.7.1</version>" +
+                    "<version>2.7.6</version></versions></versioning></metadata>",
+            ),
+        )
+        server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+
+        val result = client.fetchSignals("antlr", "antlr", "2.7.7")
+
+        assertNotNull(result)
+        assertEquals("2.7.6", result.latestVersion)
+        assertEquals(Instant.parse("2009-10-13T23:35:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `throws when both latest and versions are absent`() {
+        server.enqueue(MockResponse().setBody("<metadata><versioning></versioning></metadata>"))
+
+        val ex =
+            assertFailsWith<IOException> {
+                client.fetchSignals("com.example", "empty-metadata", "1.0.0")
+            }
+        assertTrue(ex.message?.contains("latest") == true)
+    }
 }
 
 // Wraps a real HttpClient and throws IOException directly for the first

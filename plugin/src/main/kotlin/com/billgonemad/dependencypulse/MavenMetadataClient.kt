@@ -102,8 +102,8 @@ open class MavenMetadataClient(
     ): ArtifactMetadata {
         val document = parseXml(xml) ?: throw IOException("Malformed maven-metadata.xml from $url")
         val versioning = requireChild(firstChildElement(document.documentElement, "versioning"), "versioning", url)
-        val latest = requireChild(firstChildText(versioning, "latest"), "latest", url)
         val versions = firstChildElement(versioning, "versions")?.let { allChildText(it, "version") } ?: emptyList()
+        val latest = requireChild(firstChildText(versioning, "latest") ?: versions.lastOrNull(), "latest", url)
         return ArtifactMetadata(latest, versions)
     }
 
