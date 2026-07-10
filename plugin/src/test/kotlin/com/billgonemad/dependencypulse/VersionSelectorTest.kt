@@ -29,10 +29,53 @@ class VersionSelectorTest {
         }
     }
 
+    @Test fun `classifies date-stamped legacy builds as timestamp versions`() {
+        listOf(
+            "20040616",
+            "20030418.083655",
+            "20031027.000000",
+            "20040102.233541",
+        ).forEach { assertTrue(isTimestampVersion(it), "expected timestamp version: $it") }
+    }
+
+    @Test fun `does not classify normal versions as timestamp versions`() {
+        listOf("4.12.0", "1.0.0.RELEASE", "3.2.2", "10.20.30", "1.0", "5.0.0-alpha.16").forEach {
+            assertFalse(isTimestampVersion(it), "expected non-timestamp: $it")
+        }
+    }
+
     @Test fun `selects newest stable over a newer pre-release`() {
         // okhttp scenario: 5.0.0-alpha.16 is newest overall, but 4.12.0 is newest stable.
         val ordered = listOf("4.11.0", "4.12.0", "5.0.0-alpha.16")
         assertEquals("4.12.0", selectLatestVersion("5.0.0-alpha.16", ordered, "4.12.0"))
+    }
+
+    @Test fun `skips timestamp-formatted versions when selecting latest stable`() {
+        // commons-collections:commons-collections real maven-metadata.xml (issue #59,
+        // verified against live repo1.maven.org): four bare-timestamp builds were
+        // registered after 3.2.2 in Central's append-order list, and <latest> itself
+        // is the date-stamped 20040616.
+        val ordered =
+            listOf(
+                "1.0",
+                "2.0",
+                "2.0.20020914.015953",
+                "2.0.20020914.020746",
+                "2.0.20020914.020858",
+                "2.1",
+                "2.1.1",
+                "3.0",
+                "3.0-dev2",
+                "3.1",
+                "3.2",
+                "3.2.1",
+                "3.2.2",
+                "20030418.083655",
+                "20031027.000000",
+                "20040102.233541",
+                "20040616",
+            )
+        assertEquals("3.2.2", selectLatestVersion("20040616", ordered, "3.2.2"))
     }
 
     @Test fun `includes pre-releases when current version is a pre-release`() {
