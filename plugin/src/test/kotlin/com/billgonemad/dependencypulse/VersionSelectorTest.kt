@@ -39,7 +39,13 @@ class VersionSelectorTest {
     }
 
     @Test fun `does not classify normal versions as timestamp versions`() {
-        listOf("4.12.0", "1.0.0.RELEASE", "3.2.2", "10.20.30", "1.0", "5.0.0-alpha.16").forEach {
+        listOf("4.12.0", "1.0.0.RELEASE", "3.2.2", "10.20.30", "1.0", "5.0.0-alpha.16", "2.0.20020914.015953").forEach {
+            assertFalse(isTimestampVersion(it), "expected non-timestamp: $it")
+        }
+    }
+
+    @Test fun `does not classify near-miss digit counts as timestamp versions`() {
+        listOf("1234567", "123456789", "20040616.0836", "20040616.08365").forEach {
             assertFalse(isTimestampVersion(it), "expected non-timestamp: $it")
         }
     }
