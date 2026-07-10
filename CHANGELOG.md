@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/billgonemad/dependency-pulse/compare/v0.5.1...v0.5.2) (2026-07-10)
+
+
+### Bug Fixes
+
+* **version-selector:** exclude timestamp-shaped versions from latest-stable scan ([#63](https://github.com/billgonemad/dependency-pulse/issues/63)) ([1a9287d](https://github.com/billgonemad/dependency-pulse/commit/1a9287d3a90cb87370e56deddb7c04c15d84d01f))
+
 ## [0.5.1](https://github.com/billgonemad/dependency-pulse/compare/v0.5.0...v0.5.1) (2026-07-09)
 
 
