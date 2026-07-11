@@ -24,10 +24,12 @@ Dependency Pulse Report
 🔴 io.abandoned:legacy-lib:1.0.0
    Artifact no longer published to Maven Central
    GitHub: Repo archived
+📘 jakarta.annotation:jakarta.annotation-api:3.0.0
+   Spec (stable) | Latest: 3.0.0 | Released: 29 months ago
 ❓ com.flaky:unreachable-lib:2.0.0
    Maven Central unavailable — skipped (set failOnError=true to fail the build)
 =======================
-4 dependencies scanned. 1 red, 1 yellow, 1 green, 1 unknown.
+5 dependencies scanned. 1 red, 1 yellow, 1 green, 1 unknown, 1 stable.
 ```
 
 ## Requirements
@@ -109,6 +111,7 @@ dependencyPulse {
         "testCompileClasspath",
         "testRuntimeClasspath",
     )
+    knownStableGroups = listOf("jakarta.", "javax.")  // spec/API artifacts exempt from staleness scoring
     githubToken = null          // GitHub token to raise the API rate limit (60/hr -> 5,000/hr)
     thresholds {
         yellowAfterMonths = 12  // months since last release before YELLOW
@@ -160,6 +163,7 @@ dependency:
 | ⚠️ Yellow | Last release 12–24 months ago |
 | 🔴 Red | Last release > 24 months ago, or artifact not found on Maven Central |
 | ❓ Unknown | Maven Central could not be reached |
+| 📘 Spec (stable) | Matches `knownStableGroups` and real Maven data exists — shown instead of the status above, regardless of age |
 
 Thresholds are configurable. Test configurations are excluded by default.
 
@@ -177,6 +181,32 @@ Central result and the GitHub result is worse wins:
 - If the repo can't be resolved, GitHub rate-limits the request, or the
   lookup fails, the dependency's status is unaffected — it's scored on Maven
   Central data alone, exactly as if GitHub signals weren't checked at all.
+
+### Known-stable dependencies
+
+Some artifacts — spec/API jars like Jakarta EE and legacy `javax.*` packages —
+are versioned per specification revision and can legitimately go years
+between releases without being abandoned. `knownStableGroups` marks these so
+they're never scored as abandoned, while still showing their real release
+date:
+
+````
+```
+📘 jakarta.annotation:jakarta.annotation-api:3.0.0
+   Spec (stable) | Latest: 3.0.0 | Released: 29 months ago
+```
+````
+
+Matched dependencies are excluded from `failOnRed` and counted separately in
+the summary. This only applies when the plugin has real Maven data for the
+dependency — if the artifact can't be reached or has been removed from
+Maven Central, it's still reported and gated normally; there's no "stable"
+label to hide behind for a genuine error.
+
+Entries can be a group-ID prefix (`'jakarta.'`, matched against
+`group.startsWith(...)`) or an exact `group:artifact` coordinate
+(`'com.google.code.findbugs:jsr305'`) for a specific artifact within an
+otherwise actively-developed group. The defaults are `['jakarta.', 'javax.']`.
 
 ## License
 
