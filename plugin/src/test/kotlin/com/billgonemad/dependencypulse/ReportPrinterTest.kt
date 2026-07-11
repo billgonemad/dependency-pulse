@@ -30,6 +30,7 @@ class ReportPrinterTest {
         status: DepStatus = DepStatus.GREEN,
         errorMessage: String? = null,
         githubSignals: GitHubSignals = GitHubSignals.NoRepo,
+        knownStable: Boolean = false,
     ) = DependencyInfo(
         group = group,
         artifact = artifact,
@@ -39,6 +40,7 @@ class ReportPrinterTest {
         javaxBlocker = false,
         status = status,
         errorMessage = errorMessage,
+        knownStable = knownStable,
     )
 
     @Test fun `GREEN dep shows checkmark and Active`() {
@@ -92,6 +94,53 @@ class ReportPrinterTest {
         assertTrue(output.contains("1 yellow"))
         assertTrue(output.contains("1 green"))
         assertTrue(output.contains("1 unknown"))
+    }
+
+    @Test fun `known-stable dep with Maven signals shows the spec marker`() {
+        val now = Instant.now()
+        val depList =
+            listOf(
+                dep(
+                    signals = MavenSignals("3.0.0", now.minus(900, ChronoUnit.DAYS)),
+                    status = DepStatus.RED,
+                    knownStable = true,
+                ),
+            )
+        val output = capture { ReportPrinter.print(depList, now = now) }
+        assertTrue(output.contains("📘"))
+        assertTrue(output.contains("Spec (stable) | Latest: 3.0.0"))
+        assertFalse(output.contains("🔴"))
+    }
+
+    @Test fun `known-stable dep with no Maven signals still shows the UNKNOWN presentation`() {
+        val depList = listOf(dep(status = DepStatus.UNKNOWN, errorMessage = "timeout", knownStable = true))
+        val output = capture { ReportPrinter.print(depList) }
+        assertTrue(output.contains("❓"))
+        assertTrue(output.contains("unavailable"))
+        assertFalse(output.contains("📘"))
+        assertFalse(output.contains("Spec (stable)"))
+    }
+
+    @Test fun `known-stable GREEN dep still shows the Active suffix alongside the spec marker`() {
+        val now = Instant.now()
+        val depList = listOf(dep(signals = MavenSignals("3.0.0", now), status = DepStatus.GREEN, knownStable = true))
+        val output = capture { ReportPrinter.print(depList, now = now) }
+        assertTrue(output.contains("Spec (stable) | Latest: 3.0.0"))
+        assertTrue(output.contains("| Active"))
+    }
+
+    @Test fun `summary counts known-stable deps separately from red, yellow, green, and unknown`() {
+        val now = Instant.now()
+        val deps =
+            listOf(
+                dep(signals = MavenSignals("3.0.0", now), status = DepStatus.GREEN, knownStable = true),
+                dep(status = DepStatus.RED),
+            )
+        val output = capture { ReportPrinter.print(deps, now = now) }
+        assertTrue(output.contains("2 dependencies scanned"))
+        assertTrue(output.contains("1 red"))
+        assertTrue(output.contains("0 green"))
+        assertTrue(output.contains("1 stable"))
     }
 
     @Test fun `archived GitHub repo shows GitHub archived line`() {

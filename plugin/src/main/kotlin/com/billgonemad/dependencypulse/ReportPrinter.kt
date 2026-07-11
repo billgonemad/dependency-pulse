@@ -14,11 +14,15 @@ object ReportPrinter {
         println("=======================")
         results.forEach { dep ->
             val emoji =
-                when (dep.status) {
-                    DepStatus.GREEN -> "✅"
-                    DepStatus.YELLOW -> "⚠️"
-                    DepStatus.RED -> "🔴"
-                    DepStatus.UNKNOWN -> "❓"
+                if (dep.knownStable && dep.mavenSignals != null) {
+                    "📘"
+                } else {
+                    when (dep.status) {
+                        DepStatus.GREEN -> "✅"
+                        DepStatus.YELLOW -> "⚠️"
+                        DepStatus.RED -> "🔴"
+                        DepStatus.UNKNOWN -> "❓"
+                    }
                 }
             println("$emoji ${dep.group}:${dep.artifact}:${dep.currentVersion}")
             printDetailLine(dep, now)
@@ -26,11 +30,15 @@ object ReportPrinter {
             println()
         }
         println("=======================")
-        val green = results.count { it.status == DepStatus.GREEN }
-        val yellow = results.count { it.status == DepStatus.YELLOW }
-        val red = results.count { it.status == DepStatus.RED }
-        val unknown = results.count { it.status == DepStatus.UNKNOWN }
-        println("${results.size} dependencies scanned. $red red, $yellow yellow, $green green, $unknown unknown.")
+        val green = results.count { it.status == DepStatus.GREEN && !(it.knownStable && it.mavenSignals != null) }
+        val yellow = results.count { it.status == DepStatus.YELLOW && !(it.knownStable && it.mavenSignals != null) }
+        val red = results.count { it.status == DepStatus.RED && !(it.knownStable && it.mavenSignals != null) }
+        val unknown = results.count { it.status == DepStatus.UNKNOWN && !(it.knownStable && it.mavenSignals != null) }
+        val stable = results.count { it.knownStable && it.mavenSignals != null }
+        println(
+            "${results.size} dependencies scanned. $red red, $yellow yellow, $green green, " +
+                "$unknown unknown, $stable stable.",
+        )
     }
 
     private fun printDetailLine(
@@ -51,7 +59,8 @@ object ReportPrinter {
                 if (signals != null) {
                     val months = monthsAgo(signals.latestReleaseDate, now)
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
-                    println("   Latest: ${signals.latestVersion} | Released: $months months ago$active")
+                    val stablePrefix = if (dep.knownStable) "Spec (stable) | " else ""
+                    println("   ${stablePrefix}Latest: ${signals.latestVersion} | Released: $months months ago$active")
                 } else {
                     println("   No Maven Central data available")
                 }
