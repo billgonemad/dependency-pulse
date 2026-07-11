@@ -32,6 +32,7 @@ data class DependencyInfo(
     val status: DepStatus,
     val errorMessage: String?,
     val javaxBlocker: Boolean = false,
+    val knownStable: Boolean = false,
 )
 
 private const val DAYS_PER_MONTH = 30
