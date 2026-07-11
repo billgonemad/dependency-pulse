@@ -21,6 +21,7 @@ class DependencyPulsePluginFunctionalTest {
     companion object {
         private const val THREE_YEARS_MS = 3L * 365 * 24 * 3600 * 1000
         private const val HTTP_503 = 503
+        private const val HTTP_404 = 404
     }
 
     @field:TempDir
@@ -215,6 +216,82 @@ class DependencyPulsePluginFunctionalTest {
             repositories { mavenCentral() }
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                failOnRed = true
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                ).buildAndFail()
+
+        assertTrue(result.output.contains("🔴"))
+    }
+
+    @Test fun `failOnRed does not fail when the only RED dependency matches knownStableGroups`() {
+        val threeYearsAgo = System.currentTimeMillis() - THREE_YEARS_MS
+        server.dispatcher = mavenDispatcher("3.0.0", threeYearsAgo)
+
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
+            }
+            dependencyPulse {
+                failOnRed = true
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertTrue(result.output.contains("📘"))
+        assertTrue(result.output.contains("Spec (stable)"))
+    }
+
+    @Test fun `failOnRed still fails when a knownStableGroups match has no Maven data`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
+            }
+
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
             }
             dependencyPulse {
                 failOnRed = true
