@@ -5,6 +5,8 @@ import java.time.temporal.ChronoUnit
 
 private const val DAYS_PER_MONTH = 30
 
+private fun DependencyInfo.isKnownStableWithSignals(): Boolean = knownStable && mavenSignals != null
+
 object ReportPrinter {
     fun print(
         results: List<DependencyInfo>,
@@ -14,7 +16,7 @@ object ReportPrinter {
         println("=======================")
         results.forEach { dep ->
             val emoji =
-                if (dep.knownStable && dep.mavenSignals != null) {
+                if (dep.isKnownStableWithSignals()) {
                     "📘"
                 } else {
                     when (dep.status) {
@@ -30,11 +32,11 @@ object ReportPrinter {
             println()
         }
         println("=======================")
-        val green = results.count { it.status == DepStatus.GREEN && !(it.knownStable && it.mavenSignals != null) }
-        val yellow = results.count { it.status == DepStatus.YELLOW && !(it.knownStable && it.mavenSignals != null) }
-        val red = results.count { it.status == DepStatus.RED && !(it.knownStable && it.mavenSignals != null) }
-        val unknown = results.count { it.status == DepStatus.UNKNOWN && !(it.knownStable && it.mavenSignals != null) }
-        val stable = results.count { it.knownStable && it.mavenSignals != null }
+        val green = results.count { it.status == DepStatus.GREEN && !it.isKnownStableWithSignals() }
+        val yellow = results.count { it.status == DepStatus.YELLOW && !it.isKnownStableWithSignals() }
+        val red = results.count { it.status == DepStatus.RED && !it.isKnownStableWithSignals() }
+        val unknown = results.count { it.status == DepStatus.UNKNOWN && !it.isKnownStableWithSignals() }
+        val stable = results.count { it.isKnownStableWithSignals() }
         println(
             "${results.size} dependencies scanned. $red red, $yellow yellow, $green green, " +
                 "$unknown unknown, $stable stable.",
