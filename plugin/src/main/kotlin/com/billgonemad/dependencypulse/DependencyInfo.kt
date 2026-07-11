@@ -35,6 +35,8 @@ data class DependencyInfo(
     val knownStable: Boolean = false,
 )
 
+internal fun DependencyInfo.isKnownStableWithSignals(): Boolean = knownStable && mavenSignals != null
+
 private const val DAYS_PER_MONTH = 30
 
 fun score(

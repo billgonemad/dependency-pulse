@@ -5,8 +5,6 @@ import java.time.temporal.ChronoUnit
 
 private const val DAYS_PER_MONTH = 30
 
-private fun DependencyInfo.isKnownStableWithSignals(): Boolean = knownStable && mavenSignals != null
-
 object ReportPrinter {
     fun print(
         results: List<DependencyInfo>,

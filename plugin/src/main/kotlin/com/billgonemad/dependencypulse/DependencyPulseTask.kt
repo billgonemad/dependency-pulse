@@ -75,8 +75,7 @@ abstract class DependencyPulseTask : DefaultTask() {
             )
         ReportPrinter.print(results)
 
-        val hasUnexemptedRed =
-            results.any { it.status == DepStatus.RED && !(it.knownStable && it.mavenSignals != null) }
+        val hasUnexemptedRed = results.any { it.status == DepStatus.RED && !it.isKnownStableWithSignals() }
         if (failOnRed.get() && hasUnexemptedRed) {
             throw GradleException("dependency-pulse: one or more RED dependencies detected.")
         }
