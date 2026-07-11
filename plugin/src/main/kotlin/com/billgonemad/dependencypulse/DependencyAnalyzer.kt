@@ -50,13 +50,17 @@ class DependencyAnalyzer(
         ignoreConfigurations: List<String>,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
+        knownStableGroups: List<String>,
     ): List<DependencyInfo> {
         val coords = resolver(project, ignoreConfigurations).sortedWith(compareBy({ it.group }, { it.artifact }))
         val executor = Executors.newFixedThreadPool(minOf(CONCURRENCY, maxOf(coords.size, 1)))
         return try {
             coords
-                .map { coord -> executor.submit(Callable { analyzeOne(coord, yellowAfterMonths, redAfterMonths) }) }
-                .map { it.get() }
+                .map { coord ->
+                    executor.submit(
+                        Callable { analyzeOne(coord, yellowAfterMonths, redAfterMonths, knownStableGroups) },
+                    )
+                }.map { it.get() }
         } finally {
             executor.shutdown()
         }
@@ -66,9 +70,11 @@ class DependencyAnalyzer(
         coord: Coords,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
+        knownStableGroups: List<String>,
     ): DependencyInfo {
         val (group, artifact, version) = coord
         val githubSignals = resolveGithubSignals(group, artifact, version)
+        val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
         return try {
             val signals = client.fetchSignals(group, artifact, version)
             DependencyInfo(
@@ -80,6 +86,7 @@ class DependencyAnalyzer(
                 javaxBlocker = false,
                 status = score(signals, githubSignals, yellowAfterMonths, redAfterMonths),
                 errorMessage = null,
+                knownStable = knownStable,
             )
         } catch (
             @Suppress("TooGenericExceptionCaught") e: Exception,
@@ -93,6 +100,7 @@ class DependencyAnalyzer(
                 javaxBlocker = false,
                 status = DepStatus.UNKNOWN,
                 errorMessage = e.message,
+                knownStable = knownStable,
             )
         }
     }

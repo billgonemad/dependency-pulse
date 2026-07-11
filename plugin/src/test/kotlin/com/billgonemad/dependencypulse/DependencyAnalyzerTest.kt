@@ -6,6 +6,7 @@ import java.time.Instant
 import kotlin.system.measureTimeMillis
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -71,7 +72,7 @@ class DependencyAnalyzerTest {
             )
         val analyzer = analyzerWith(greenSignals, coords)
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(1, results.size)
         assertEquals("org.example", results[0].group)
@@ -85,7 +86,7 @@ class DependencyAnalyzerTest {
         }
         val analyzer = DependencyAnalyzer(stubClient(greenSignals), stubPomClient(), stubGithubClient(), resolver)
 
-        analyzer.analyze(ProjectBuilder.builder().build(), listOf("testImplementation"), 12, 24)
+        analyzer.analyze(ProjectBuilder.builder().build(), listOf("testImplementation"), 12, 24, emptyList())
 
         assertEquals(listOf("testImplementation"), capturedIgnore)
     }
@@ -93,7 +94,7 @@ class DependencyAnalyzerTest {
     @Test fun `returns RED when artifact not found on Central`() {
         val analyzer = analyzerWith(null, setOf(Coords("com.example", "gone", "1.0")))
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(DepStatus.RED, results[0].status)
     }
@@ -104,7 +105,7 @@ class DependencyAnalyzerTest {
         }
         val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient(), stubGithubClient(), resolver)
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertNotNull(results[0].errorMessage)
@@ -113,7 +114,7 @@ class DependencyAnalyzerTest {
     @Test fun `returns GREEN for recent artifact`() {
         val analyzer = analyzerWith(greenSignals, setOf(Coords("org.example", "fresh", "1.0")))
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(DepStatus.GREEN, results[0].status)
     }
@@ -128,7 +129,7 @@ class DependencyAnalyzerTest {
                 githubClient = stubGithubClient(githubSignals),
             )
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(githubSignals, results[0].githubSignals)
     }
@@ -141,7 +142,7 @@ class DependencyAnalyzerTest {
                 pomClient = stubPomClient(null),
             )
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
     }
@@ -159,10 +160,40 @@ class DependencyAnalyzerTest {
                 resolver,
             )
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertEquals(githubSignals, results[0].githubSignals)
+    }
+
+    @Test fun `sets knownStable when the coordinate matches a configured group prefix`() {
+        val analyzer =
+            analyzerWith(greenSignals, setOf(Coords("jakarta.annotation", "jakarta.annotation-api", "3.0.0")))
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, listOf("jakarta."))
+
+        assertTrue(results[0].knownStable)
+    }
+
+    @Test fun `leaves knownStable false when no configured entry matches`() {
+        val analyzer = analyzerWith(greenSignals, setOf(Coords("org.example", "foo", "1.0")))
+
+        val results =
+            analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, listOf("jakarta.", "javax."))
+
+        assertFalse(results[0].knownStable)
+    }
+
+    @Test fun `sets knownStable on both the success path and the exception path`() {
+        val resolver = { _: Project, _: List<String> ->
+            setOf(Coords("jakarta.annotation", "jakarta.annotation-api", "3.0.0"))
+        }
+        val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient(), stubGithubClient(), resolver)
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, listOf("jakarta."))
+
+        assertEquals(DepStatus.UNKNOWN, results[0].status)
+        assertTrue(results[0].knownStable)
     }
 
     @Test fun `sets githubSignals to FetchFailed when PomClient throws unexpectedly`() {
@@ -173,7 +204,7 @@ class DependencyAnalyzerTest {
                 pomClient = throwingPomClient(),
             )
 
-        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
         assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
         assertEquals(DepStatus.GREEN, results[0].status)
@@ -198,7 +229,7 @@ class DependencyAnalyzerTest {
 
         val elapsedMs =
             measureTimeMillis {
-                analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24)
+                analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
             }
 
         assertTrue(elapsedMs < delayMs * coords.size)

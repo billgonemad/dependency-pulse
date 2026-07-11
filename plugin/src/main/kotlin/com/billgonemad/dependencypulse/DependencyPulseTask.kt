@@ -71,6 +71,7 @@ abstract class DependencyPulseTask : DefaultTask() {
                 ignoreConfigurations.get(),
                 yellowAfterMonths.get(),
                 redAfterMonths.get(),
+                knownStableGroups.get(),
             )
         ReportPrinter.print(results)
 
