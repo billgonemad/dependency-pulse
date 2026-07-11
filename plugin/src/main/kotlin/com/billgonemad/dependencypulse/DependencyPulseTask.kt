@@ -23,6 +23,9 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val ignoreConfigurations: ListProperty<String>
 
     @get:Input
+    abstract val knownStableGroups: ListProperty<String>
+
+    @get:Input
     abstract val yellowAfterMonths: Property<Int>
 
     @get:Input

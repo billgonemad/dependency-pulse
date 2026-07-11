@@ -15,6 +15,7 @@ abstract class DependencyPulseExtension
         abstract val failOnError: Property<Boolean>
         abstract val runOnCheck: Property<Boolean>
         abstract val ignoreConfigurations: ListProperty<String>
+        abstract val knownStableGroups: ListProperty<String>
         abstract val githubToken: Property<String>
         val thresholds: Thresholds = objects.newInstance(Thresholds::class.java)
 

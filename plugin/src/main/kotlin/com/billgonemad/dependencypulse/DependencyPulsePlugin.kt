@@ -20,6 +20,7 @@ class DependencyPulsePlugin : Plugin<Project> {
                 "testRuntimeClasspath",
             ),
         )
+        ext.knownStableGroups.convention(listOf("jakarta.", "javax."))
         ext.thresholds.yellowAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_YELLOW_AFTER_MONTHS)
         ext.thresholds.redAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_RED_AFTER_MONTHS)
 
@@ -49,6 +50,7 @@ class DependencyPulsePlugin : Plugin<Project> {
             task.failOnRed.set(ext.failOnRed)
             task.failOnError.set(ext.failOnError)
             task.ignoreConfigurations.set(ext.ignoreConfigurations)
+            task.knownStableGroups.set(ext.knownStableGroups)
             task.yellowAfterMonths.set(ext.thresholds.yellowAfterMonths)
             task.redAfterMonths.set(ext.thresholds.redAfterMonths)
             task.githubToken.set(ext.githubToken)
