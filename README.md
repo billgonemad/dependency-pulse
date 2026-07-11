@@ -203,6 +203,12 @@ dependency — if the artifact can't be reached or has been removed from
 Maven Central, it's still reported and gated normally; there's no "stable"
 label to hide behind for a genuine error.
 
+This exemption is based on whether the plugin has real Maven release data —
+not on which signal is driving the status. The one exception: an **archived
+GitHub repository always wins**, exactly as described above in GitHub
+signals — a known-stable match never masks a dependency whose repo has
+actually been archived.
+
 Entries can be a group-ID prefix (`'jakarta.'`, matched against
 `group.startsWith(...)`) or an exact `group:artifact` coordinate
 (`'com.google.code.findbugs:jsr305'`) for a specific artifact within an

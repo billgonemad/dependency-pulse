@@ -4,6 +4,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class DependencyInfoTest {
     @Test
@@ -42,5 +43,76 @@ class DependencyInfoTest {
         val signals = GitHubSignals.Found(lastCommitDate = null, isArchived = true)
         assertEquals(null, signals.lastCommitDate)
         assertEquals(true, signals.isArchived)
+    }
+
+    private fun dependencyInfo(
+        knownStable: Boolean,
+        mavenSignals: MavenSignals?,
+        githubSignals: GitHubSignals,
+    ): DependencyInfo =
+        DependencyInfo(
+            group = "com.example",
+            artifact = "lib",
+            currentVersion = "1.0",
+            mavenSignals = mavenSignals,
+            githubSignals = githubSignals,
+            status = DepStatus.GREEN,
+            errorMessage = null,
+            knownStable = knownStable,
+        )
+
+    @Test
+    fun `isKnownStableWithSignals is true when known stable with maven signals and non-archived github`() {
+        val info =
+            dependencyInfo(
+                knownStable = true,
+                mavenSignals = MavenSignals("1.0", Instant.EPOCH),
+                githubSignals = GitHubSignals.NoRepo,
+            )
+        assertTrue(info.isKnownStableWithSignals())
+    }
+
+    @Test
+    fun `isKnownStableWithSignals is false when maven signals are null`() {
+        val info =
+            dependencyInfo(
+                knownStable = true,
+                mavenSignals = null,
+                githubSignals = GitHubSignals.NoRepo,
+            )
+        assertFalse(info.isKnownStableWithSignals())
+    }
+
+    @Test
+    fun `isKnownStableWithSignals is false when not known stable`() {
+        val info =
+            dependencyInfo(
+                knownStable = false,
+                mavenSignals = MavenSignals("1.0", Instant.EPOCH),
+                githubSignals = GitHubSignals.NoRepo,
+            )
+        assertFalse(info.isKnownStableWithSignals())
+    }
+
+    @Test
+    fun `isKnownStableWithSignals is false when github repo is archived`() {
+        val info =
+            dependencyInfo(
+                knownStable = true,
+                mavenSignals = MavenSignals("1.0", Instant.EPOCH),
+                githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+            )
+        assertFalse(info.isKnownStableWithSignals())
+    }
+
+    @Test
+    fun `isKnownStableWithSignals is true when github repo found but not archived`() {
+        val info =
+            dependencyInfo(
+                knownStable = true,
+                mavenSignals = MavenSignals("1.0", Instant.EPOCH),
+                githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false),
+            )
+        assertTrue(info.isKnownStableWithSignals())
     }
 }

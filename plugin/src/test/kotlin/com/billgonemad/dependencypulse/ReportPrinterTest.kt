@@ -143,6 +143,26 @@ class ReportPrinterTest {
         assertTrue(output.contains("1 stable"))
     }
 
+    @Test fun `known-stable dep with an archived GitHub repo is not relabeled stable`() {
+        val now = Instant.now()
+        val depList =
+            listOf(
+                dep(
+                    signals = MavenSignals("3.0.0", now.minus(60, ChronoUnit.DAYS)),
+                    status = DepStatus.RED,
+                    knownStable = true,
+                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+                ),
+            )
+        val output = capture { ReportPrinter.print(depList, now = now) }
+        assertTrue(output.contains("🔴"))
+        assertTrue(output.contains("GitHub: Repo archived"))
+        assertFalse(output.contains("📘"))
+        assertFalse(output.contains("Spec (stable)"))
+        assertTrue(output.contains("1 red"))
+        assertTrue(output.contains("0 stable"))
+    }
+
     @Test fun `archived GitHub repo shows GitHub archived line`() {
         val depList =
             listOf(
