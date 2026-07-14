@@ -29,6 +29,7 @@ class DependencyPulsePluginTest {
             listOf("testImplementation", "testRuntimeOnly", "testCompileClasspath", "testRuntimeClasspath"),
             ext.ignoreConfigurations.get(),
         )
+        assertEquals(listOf("jakarta.", "javax."), ext.knownStableGroups.get())
     }
 
     @Test fun `lazy configuration propagates extension values to task`() {
@@ -39,6 +40,7 @@ class DependencyPulsePluginTest {
         ext.failOnRed.set(true)
         ext.failOnError.set(true)
         ext.ignoreConfigurations.set(listOf("compileClasspath"))
+        ext.knownStableGroups.set(listOf("com.example."))
         ext.thresholds { t ->
             t.yellowAfterMonths.set(6)
             t.redAfterMonths.set(18)
@@ -48,6 +50,7 @@ class DependencyPulsePluginTest {
         assertEquals(true, task.failOnRed.get())
         assertEquals(true, task.failOnError.get())
         assertEquals(listOf("compileClasspath"), task.ignoreConfigurations.get())
+        assertEquals(listOf("com.example."), task.knownStableGroups.get())
         assertEquals(6, task.yellowAfterMonths.get())
         assertEquals(18, task.redAfterMonths.get())
     }

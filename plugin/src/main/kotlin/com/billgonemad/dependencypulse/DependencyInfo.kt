@@ -32,7 +32,13 @@ data class DependencyInfo(
     val status: DepStatus,
     val errorMessage: String?,
     val javaxBlocker: Boolean = false,
+    val knownStable: Boolean = false,
 )
+
+internal fun DependencyInfo.isKnownStableWithSignals(): Boolean {
+    val archived = (githubSignals as? GitHubSignals.Found)?.isArchived == true
+    return knownStable && mavenSignals != null && !archived
+}
 
 private const val DAYS_PER_MONTH = 30
 

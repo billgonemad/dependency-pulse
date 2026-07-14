@@ -23,6 +23,9 @@ abstract class DependencyPulseTask : DefaultTask() {
     abstract val ignoreConfigurations: ListProperty<String>
 
     @get:Input
+    abstract val knownStableGroups: ListProperty<String>
+
+    @get:Input
     abstract val yellowAfterMonths: Property<Int>
 
     @get:Input
@@ -68,10 +71,12 @@ abstract class DependencyPulseTask : DefaultTask() {
                 ignoreConfigurations.get(),
                 yellowAfterMonths.get(),
                 redAfterMonths.get(),
+                knownStableGroups.get(),
             )
         ReportPrinter.print(results)
 
-        if (failOnRed.get() && results.any { it.status == DepStatus.RED }) {
+        val hasUnexemptedRed = results.any { it.status == DepStatus.RED && !it.isKnownStableWithSignals() }
+        if (failOnRed.get() && hasUnexemptedRed) {
             throw GradleException("dependency-pulse: one or more RED dependencies detected.")
         }
         if (failOnError.get() && results.any { it.status == DepStatus.UNKNOWN }) {
