@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/billgonemad/dependency-pulse/compare/v0.5.2...v0.6.0) (2026-07-14)
+
+
+### Features
+
+* **known-stable-groups:** add knownStableGroups allowlist for spec/API artifacts ([#67](https://github.com/billgonemad/dependency-pulse/issues/67)) ([144638e](https://github.com/billgonemad/dependency-pulse/commit/144638e7d487666818355f8bc5f8dc5bd531e725))
+
 ## [0.5.2](https://github.com/billgonemad/dependency-pulse/compare/v0.5.1...v0.5.2) (2026-07-10)
 
 
