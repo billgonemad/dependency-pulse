@@ -6,28 +6,26 @@ import java.time.temporal.ChronoUnit
 private const val DAYS_PER_MONTH = 30
 
 object ReportPrinter {
-    fun print(
+    internal fun print(
         results: List<DependencyInfo>,
         now: Instant = Instant.now(),
+        outputLevel: OutputLevel = OutputLevel.VERBOSE,
     ) {
         println("Dependency Pulse Report")
         println("=======================")
-        results.forEach { dep ->
-            val emoji =
-                if (dep.isKnownStableWithSignals()) {
-                    "📘"
-                } else {
-                    when (dep.status) {
-                        DepStatus.GREEN -> "✅"
-                        DepStatus.YELLOW -> "⚠️"
-                        DepStatus.RED -> "🔴"
-                        DepStatus.UNKNOWN -> "❓"
-                    }
-                }
-            println("$emoji ${dep.group}:${dep.artifact}:${dep.currentVersion}")
-            printDetailLine(dep, now)
-            printGithubLine(dep, now)
-            println()
+        if (outputLevel != OutputLevel.SUMMARY_ONLY) {
+            results.forEach { dep ->
+                val isPlainGreenInDefaultMode =
+                    outputLevel == OutputLevel.DEFAULT &&
+                        dep.status == DepStatus.GREEN &&
+                        !dep.isKnownStableWithSignals()
+                if (isPlainGreenInDefaultMode) return@forEach
+                val emoji = selectEmoji(dep)
+                println("$emoji ${dep.group}:${dep.artifact}:${dep.currentVersion}")
+                printDetailLine(dep, now)
+                printGithubLine(dep, now)
+                println()
+            }
         }
         println("=======================")
         val green = results.count { it.status == DepStatus.GREEN && !it.isKnownStableWithSignals() }
@@ -40,6 +38,18 @@ object ReportPrinter {
                 "$unknown unknown, $stable stable.",
         )
     }
+
+    private fun selectEmoji(dep: DependencyInfo): String =
+        if (dep.isKnownStableWithSignals()) {
+            "📘"
+        } else {
+            when (dep.status) {
+                DepStatus.GREEN -> "✅"
+                DepStatus.YELLOW -> "⚠️"
+                DepStatus.RED -> "🔴"
+                DepStatus.UNKNOWN -> "❓"
+            }
+        }
 
     private fun printDetailLine(
         dep: DependencyInfo,
