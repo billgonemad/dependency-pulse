@@ -14,6 +14,8 @@ abstract class DependencyPulseExtension
         abstract val failOnRed: Property<Boolean>
         abstract val failOnError: Property<Boolean>
         abstract val runOnCheck: Property<Boolean>
+        abstract val summaryOnly: Property<Boolean>
+        abstract val showGreen: Property<Boolean>
         abstract val ignoreConfigurations: ListProperty<String>
         abstract val knownStableGroups: ListProperty<String>
         abstract val githubToken: Property<String>

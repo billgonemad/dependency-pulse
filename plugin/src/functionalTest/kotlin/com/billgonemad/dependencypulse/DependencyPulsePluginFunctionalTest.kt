@@ -89,11 +89,77 @@ class DependencyPulsePluginFunctionalTest {
                     "-DpomBaseUrl=http://${server.hostName}:${server.port}",
                     "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
+                    "--show-green",
                 ).build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
+        assertTrue(result.output.contains("dependencies scanned"))
+    }
+
+    @Test fun `default output hides GREEN dependencies that --show-green would reveal`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertTrue(!result.output.contains("slf4j-api"))
+        assertTrue(result.output.contains("1 green"))
+    }
+
+    @Test fun `--summary-only suppresses per-dependency lines`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            repositories { mavenCentral() }
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--summary-only",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertTrue(!result.output.contains("slf4j-api"))
         assertTrue(result.output.contains("dependencies scanned"))
     }
 

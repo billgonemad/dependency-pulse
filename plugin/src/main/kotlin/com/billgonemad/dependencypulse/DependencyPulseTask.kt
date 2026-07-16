@@ -8,6 +8,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.options.Option
 import org.gradle.work.DisableCachingByDefault
 import java.net.http.HttpClient
 
@@ -18,6 +19,20 @@ abstract class DependencyPulseTask : DefaultTask() {
 
     @get:Input
     abstract val failOnError: Property<Boolean>
+
+    @get:Input
+    abstract val summaryOnly: Property<Boolean>
+
+    @get:Input
+    abstract val showGreen: Property<Boolean>
+
+    @get:Internal
+    @set:Option(option = "summary-only", description = "Print only the summary counts, no per-dependency lines")
+    var cliSummaryOnly: Boolean = false
+
+    @get:Internal
+    @set:Option(option = "show-green", description = "Also print GREEN (up-to-date) dependencies")
+    var cliShowGreen: Boolean = false
 
     @get:Input
     abstract val ignoreConfigurations: ListProperty<String>
@@ -49,6 +64,13 @@ abstract class DependencyPulseTask : DefaultTask() {
 
     @TaskAction
     fun run() {
+        val outputLevel =
+            resolveOutputLevel(
+                cliSummaryOnly = cliSummaryOnly,
+                cliShowGreen = cliShowGreen,
+                extSummaryOnly = summaryOnly.get(),
+                extShowGreen = showGreen.get(),
+            )
         val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
         val client =
             MavenMetadataClient(
@@ -73,7 +95,7 @@ abstract class DependencyPulseTask : DefaultTask() {
                 redAfterMonths.get(),
                 knownStableGroups.get(),
             )
-        ReportPrinter.print(results)
+        ReportPrinter.print(results, outputLevel = outputLevel)
 
         val hasUnexemptedRed = results.any { it.status == DepStatus.RED && !it.isKnownStableWithSignals() }
         if (failOnRed.get() && hasUnexemptedRed) {
