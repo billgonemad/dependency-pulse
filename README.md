@@ -13,6 +13,10 @@ maintenance problem.
 
 ## Sample Output
 
+Shown with `--show-green` for illustration — by default, plain GREEN
+dependencies are omitted from the per-dependency listing (see
+[Output verbosity](#output-verbosity)).
+
 ```
 Dependency Pulse Report
 =======================
