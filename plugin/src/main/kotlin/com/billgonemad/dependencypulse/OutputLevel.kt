@@ -13,15 +13,18 @@ internal fun resolveOutputLevel(
     if (cliSummaryOnly && cliShowGreen) {
         throw GradleException("--summary-only and --show-green are mutually exclusive")
     }
+    // Validated unconditionally — even when a CLI flag wins the resolution below, an
+    // internally-contradictory extension config is still a real misconfiguration that
+    // should fail the build, not just when no CLI flag happens to be present.
+    if (extSummaryOnly && extShowGreen) {
+        throw GradleException(
+            "dependencyPulse.summaryOnly and dependencyPulse.showGreen are mutually exclusive",
+        )
+    }
     val (summaryOnly, showGreen) =
         if (cliSummaryOnly || cliShowGreen) {
             cliSummaryOnly to cliShowGreen
         } else {
-            if (extSummaryOnly && extShowGreen) {
-                throw GradleException(
-                    "dependencyPulse.summaryOnly and dependencyPulse.showGreen are mutually exclusive",
-                )
-            }
             extSummaryOnly to extShowGreen
         }
     return when {

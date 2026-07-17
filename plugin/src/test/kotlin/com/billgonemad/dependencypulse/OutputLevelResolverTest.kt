@@ -89,4 +89,20 @@ class OutputLevelResolverTest {
             exception.message,
         )
     }
+
+    @Test fun `a valid CLI flag does not mask a contradictory extension config`() {
+        val exception =
+            assertFailsWith<GradleException> {
+                resolveOutputLevel(
+                    cliSummaryOnly = false,
+                    cliShowGreen = true,
+                    extSummaryOnly = true,
+                    extShowGreen = true,
+                )
+            }
+        assertEquals(
+            "dependencyPulse.summaryOnly and dependencyPulse.showGreen are mutually exclusive",
+            exception.message,
+        )
+    }
 }

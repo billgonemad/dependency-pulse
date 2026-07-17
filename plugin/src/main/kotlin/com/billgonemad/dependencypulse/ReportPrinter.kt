@@ -6,6 +6,11 @@ import java.time.temporal.ChronoUnit
 private const val DAYS_PER_MONTH = 30
 
 object ReportPrinter {
+    // Defaults to VERBOSE (today's original always-print behavior), not DEFAULT, so the
+    // ~16 pre-existing call sites in ReportPrinterTest that omit outputLevel keep compiling
+    // and passing unchanged. The one production caller (DependencyPulseTask.run()) always
+    // passes the resolved level explicitly — this default is a test-ergonomics convenience,
+    // not a path that can silently ship reduced output.
     internal fun print(
         results: List<DependencyInfo>,
         now: Instant = Instant.now(),
@@ -15,14 +20,15 @@ object ReportPrinter {
         println("=======================")
         if (outputLevel != OutputLevel.SUMMARY_ONLY) {
             results.forEach { dep ->
+                val isStable = dep.isKnownStableWithSignals()
                 val isPlainGreenInDefaultMode =
                     outputLevel == OutputLevel.DEFAULT &&
                         dep.status == DepStatus.GREEN &&
-                        !dep.isKnownStableWithSignals()
+                        !isStable
                 if (isPlainGreenInDefaultMode) return@forEach
-                val emoji = selectEmoji(dep)
+                val emoji = selectEmoji(dep, isStable)
                 println("$emoji ${dep.group}:${dep.artifact}:${dep.currentVersion}")
-                printDetailLine(dep, now)
+                printDetailLine(dep, now, isStable)
                 printGithubLine(dep, now)
                 println()
             }
@@ -39,8 +45,11 @@ object ReportPrinter {
         )
     }
 
-    private fun selectEmoji(dep: DependencyInfo): String =
-        if (dep.isKnownStableWithSignals()) {
+    private fun selectEmoji(
+        dep: DependencyInfo,
+        isStable: Boolean,
+    ): String =
+        if (isStable) {
             "📘"
         } else {
             when (dep.status) {
@@ -54,6 +63,7 @@ object ReportPrinter {
     private fun printDetailLine(
         dep: DependencyInfo,
         now: Instant,
+        isStable: Boolean,
     ) {
         when {
             dep.status == DepStatus.UNKNOWN -> {
@@ -69,7 +79,7 @@ object ReportPrinter {
                 if (signals != null) {
                     val months = monthsAgo(signals.latestReleaseDate, now)
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
-                    val stablePrefix = if (dep.isKnownStableWithSignals()) "Spec (stable) | " else ""
+                    val stablePrefix = if (isStable) "Spec (stable) | " else ""
                     println("   ${stablePrefix}Latest: ${signals.latestVersion} | Released: $months months ago$active")
                 } else {
                     println("   No Maven Central data available")
