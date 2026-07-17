@@ -13,6 +13,10 @@ maintenance problem.
 
 ## Sample Output
 
+Shown with `--show-green` for illustration — by default, plain GREEN
+dependencies are omitted from the per-dependency listing (see
+[Output verbosity](#output-verbosity)).
+
 ```
 Dependency Pulse Report
 =======================
@@ -105,6 +109,8 @@ dependencyPulse {
     failOnRed = false          // fail the build if any RED dependency is found
     failOnError = false        // fail the build if Maven Central is unreachable
     runOnCheck = false         // attach dependencyPulse to the check lifecycle task
+    summaryOnly = false        // print only the summary counts, no per-dependency lines
+    showGreen = false          // also print GREEN (up-to-date) dependencies
     ignoreConfigurations = listOf(
         "testImplementation",
         "testRuntimeOnly",
@@ -137,6 +143,35 @@ Run the task with:
 ```bash
 ./gradlew dependencyPulse
 ```
+
+### Output verbosity
+
+By default, the report hides plain up-to-date (GREEN) dependency lines and
+only prints YELLOW/RED/UNKNOWN findings plus 📘 stable-spec lines — footer
+counts always include everything, regardless of what's printed above them.
+This changed from earlier versions, which printed every dependency
+unconditionally; set `showGreen = true` (or pass `--show-green`) to restore
+that behavior.
+
+Three levels, controlled by extension properties or CLI flags (CLI wins if
+both are set):
+
+| Level | Extension | CLI flag | Behavior |
+|-------|-----------|----------|----------|
+| Summary only | `summaryOnly = true` | `--summary-only` | No per-dependency lines at all, just the footer counts |
+| Default | *(neither set)* | *(no flag)* | YELLOW/RED/UNKNOWN and 📘 stable-spec lines only |
+| Verbose | `showGreen = true` | `--show-green` | Every dependency, including plain GREEN — today's original behavior |
+
+```bash
+./gradlew dependencyPulse --show-green
+./gradlew dependencyPulse --summary-only
+```
+
+Setting both `summaryOnly` and `showGreen` (via the same source — both
+extension properties, or both CLI flags) is a configuration error and fails
+the build. Note there's no CLI flag to force plain `DEFAULT` output for a
+single run if `build.gradle` already pins `summaryOnly` or `showGreen` —
+CLI flags only push toward the two extremes, not back to the default.
 
 ### Failing CI on abandoned dependencies
 

@@ -163,6 +163,58 @@ class ReportPrinterTest {
         assertTrue(output.contains("0 stable"))
     }
 
+    @Test fun `SUMMARY_ONLY hides all per-dependency lines but keeps footer counts`() {
+        val now = Instant.now()
+        val deps =
+            listOf(
+                dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN),
+                dep(status = DepStatus.RED),
+            )
+        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.SUMMARY_ONLY) }
+        assertFalse(output.contains("✅"))
+        assertFalse(output.contains("🔴"))
+        assertFalse(output.contains("Latest:"))
+        assertTrue(output.contains("2 dependencies scanned"))
+        assertTrue(output.contains("1 red"))
+        assertTrue(output.contains("1 green"))
+    }
+
+    @Test fun `DEFAULT hides plain GREEN but keeps stable, yellow, red, and unknown lines`() {
+        val now = Instant.now()
+        val deps =
+            listOf(
+                dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN),
+                dep(
+                    signals = MavenSignals("3.0.0", now.minus(900, ChronoUnit.DAYS)),
+                    status = DepStatus.RED,
+                    knownStable = true,
+                ),
+                dep(signals = MavenSignals("1.0", now.minus(400, ChronoUnit.DAYS)), status = DepStatus.YELLOW),
+                dep(status = DepStatus.RED),
+                dep(status = DepStatus.UNKNOWN, errorMessage = "timeout"),
+            )
+        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.DEFAULT) }
+        assertFalse(output.contains("✅"))
+        assertTrue(output.contains("📘"))
+        assertTrue(output.contains("⚠️"))
+        assertTrue(output.contains("🔴"))
+        assertTrue(output.contains("❓"))
+        assertTrue(output.contains("5 dependencies scanned"))
+        assertTrue(output.contains("1 red"))
+        assertTrue(output.contains("1 yellow"))
+        assertTrue(output.contains("1 green"))
+        assertTrue(output.contains("1 unknown"))
+        assertTrue(output.contains("1 stable"))
+    }
+
+    @Test fun `VERBOSE shows plain GREEN lines exactly like today's default`() {
+        val now = Instant.now()
+        val depList = listOf(dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN))
+        val output = capture { ReportPrinter.print(depList, now = now, outputLevel = OutputLevel.VERBOSE) }
+        assertTrue(output.contains("✅"))
+        assertTrue(output.contains("Active"))
+    }
+
     @Test fun `archived GitHub repo shows GitHub archived line`() {
         val depList =
             listOf(

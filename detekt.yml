@@ -182,7 +182,10 @@ complexity:
     ignoreStringsRegex: '$^'
   TooManyFunctions:
     active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/commonTest/**', '**/jvmTest/**', '**/androidUnitTest/**', '**/androidInstrumentedTest/**', '**/jsTest/**', '**/iosTest/**']
+    # Added '**/functionalTest/**' for the same reason as FunctionNaming above: the
+    # upstream default excludes '**/test/**' but does not cover '**/functionalTest/**',
+    # and functional test classes legitimately grow their @Test count as scenarios are added.
+    excludes: ['**/test/**', '**/functionalTest/**', '**/androidTest/**', '**/commonTest/**', '**/jvmTest/**', '**/androidUnitTest/**', '**/androidInstrumentedTest/**', '**/jsTest/**', '**/iosTest/**']
     thresholdInFiles: 11
     thresholdInClasses: 11
     thresholdInInterfaces: 11
