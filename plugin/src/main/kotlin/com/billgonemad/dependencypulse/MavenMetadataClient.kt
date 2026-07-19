@@ -29,7 +29,7 @@ private const val DISALLOW_DOCTYPE_FEATURE = "http://apache.org/xml/features/dis
 
 open class MavenMetadataClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
-    private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val httpClient: HttpClient = HttpClientProvider.httpClient,
     private val retryDelayMs: Long = 1_000L,
 ) {
     private val metadataCache = ConcurrentHashMap<String, ArtifactMetadata>()

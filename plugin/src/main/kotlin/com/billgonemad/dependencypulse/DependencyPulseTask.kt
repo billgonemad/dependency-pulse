@@ -9,7 +9,6 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.work.DisableCachingByDefault
-import java.net.http.HttpClient
 
 @DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
@@ -69,7 +68,7 @@ abstract class DependencyPulseTask : DefaultTask() {
                 extSummaryOnly = summaryOnly.get(),
                 extShowGreen = showGreen.get(),
             )
-        val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+        val httpClient = HttpClientProvider.httpClient
         val client =
             MavenMetadataClient(
                 baseUrl = pomBaseUrl.get(),
