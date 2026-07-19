@@ -8,6 +8,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 
 class DependencyPulsePluginTest {
     @Test fun `plugin registers dependencyPulse task`() {
@@ -128,5 +129,17 @@ class DependencyPulsePluginTest {
                 .plusSeconds(60)
         service.limitedUntil = until
         assertEquals(until, service.limitedUntil)
+    }
+
+    @Test fun `httpClientService provides the same HttpClient instance across repeated task runs`() {
+        val project = ProjectBuilder.builder().build()
+        project.plugins.apply("com.billgonemad.dependency-pulse")
+
+        val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
+
+        val first = task.httpClientService.get().httpClient
+        val second = task.httpClientService.get().httpClient
+
+        assertSame(first, second, "the HttpClient should be shared for the daemon's lifetime, not rebuilt per run")
     }
 }

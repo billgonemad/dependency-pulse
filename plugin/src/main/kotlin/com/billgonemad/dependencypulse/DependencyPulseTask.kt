@@ -28,31 +28,30 @@ internal fun analyzeDependencies(
     httpClient: HttpClient,
     rateLimitState: RateLimitState,
     config: DependencyAnalysisConfig,
-): List<DependencyInfo> =
-    httpClient.use {
-        val client =
-            MavenMetadataClient(
-                baseUrl = config.pomBaseUrl,
-                httpClient = httpClient,
-                retryDelayMs = config.retryDelayMs,
-            )
-        val pomClient = PomClient(baseUrl = config.pomBaseUrl, httpClient = httpClient)
-        val githubClient =
-            GitHubClient(
-                baseUrl = config.githubApiBaseUrl,
-                httpClient = httpClient,
-                token = config.githubToken,
-                rateLimitState = rateLimitState,
-            )
-        val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
-        analyzer.analyze(
-            project,
-            config.ignoreConfigurations,
-            config.yellowAfterMonths,
-            config.redAfterMonths,
-            config.knownStableGroups,
+): List<DependencyInfo> {
+    val client =
+        MavenMetadataClient(
+            baseUrl = config.pomBaseUrl,
+            httpClient = httpClient,
+            retryDelayMs = config.retryDelayMs,
         )
-    }
+    val pomClient = PomClient(baseUrl = config.pomBaseUrl, httpClient = httpClient)
+    val githubClient =
+        GitHubClient(
+            baseUrl = config.githubApiBaseUrl,
+            httpClient = httpClient,
+            token = config.githubToken,
+            rateLimitState = rateLimitState,
+        )
+    val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
+    return analyzer.analyze(
+        project,
+        config.ignoreConfigurations,
+        config.yellowAfterMonths,
+        config.redAfterMonths,
+        config.knownStableGroups,
+    )
+}
 
 @DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
@@ -103,6 +102,9 @@ abstract class DependencyPulseTask : DefaultTask() {
     @get:Internal
     abstract val githubRateLimitService: Property<GitHubRateLimitService>
 
+    @get:Internal
+    abstract val httpClientService: Property<HttpClientService>
+
     @TaskAction
     fun run() {
         val outputLevel =
@@ -112,7 +114,7 @@ abstract class DependencyPulseTask : DefaultTask() {
                 extSummaryOnly = summaryOnly.get(),
                 extShowGreen = showGreen.get(),
             )
-        val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
+        val httpClient = httpClientService.get().httpClient
         val results =
             analyzeDependencies(
                 project = project,
