@@ -2,6 +2,7 @@ package com.billgonemad.dependencypulse
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
+import org.gradle.api.Project
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
@@ -10,6 +11,48 @@ import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.work.DisableCachingByDefault
 import java.net.http.HttpClient
+
+internal data class DependencyAnalysisConfig(
+    val pomBaseUrl: String,
+    val githubApiBaseUrl: String,
+    val githubToken: String?,
+    val retryDelayMs: Long,
+    val ignoreConfigurations: List<String>,
+    val yellowAfterMonths: Int,
+    val redAfterMonths: Int,
+    val knownStableGroups: List<String>,
+)
+
+internal fun analyzeDependencies(
+    project: Project,
+    httpClient: HttpClient,
+    rateLimitState: RateLimitState,
+    config: DependencyAnalysisConfig,
+): List<DependencyInfo> =
+    httpClient.use {
+        val client =
+            MavenMetadataClient(
+                baseUrl = config.pomBaseUrl,
+                httpClient = httpClient,
+                retryDelayMs = config.retryDelayMs,
+            )
+        val pomClient = PomClient(baseUrl = config.pomBaseUrl, httpClient = httpClient)
+        val githubClient =
+            GitHubClient(
+                baseUrl = config.githubApiBaseUrl,
+                httpClient = httpClient,
+                token = config.githubToken,
+                rateLimitState = rateLimitState,
+            )
+        val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
+        analyzer.analyze(
+            project,
+            config.ignoreConfigurations,
+            config.yellowAfterMonths,
+            config.redAfterMonths,
+            config.knownStableGroups,
+        )
+    }
 
 @DisableCachingByDefault(because = "Queries live Maven Central API — results must not be cached across builds")
 abstract class DependencyPulseTask : DefaultTask() {
@@ -70,28 +113,22 @@ abstract class DependencyPulseTask : DefaultTask() {
                 extShowGreen = showGreen.get(),
             )
         val httpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
-        val client =
-            MavenMetadataClient(
-                baseUrl = pomBaseUrl.get(),
-                httpClient = httpClient,
-                retryDelayMs = retryDelayMs.get(),
-            )
-        val pomClient = PomClient(baseUrl = pomBaseUrl.get(), httpClient = httpClient)
-        val githubClient =
-            GitHubClient(
-                baseUrl = githubApiBaseUrl.get(),
-                httpClient = httpClient,
-                token = githubToken.orNull,
-                rateLimitState = githubRateLimitService.get(),
-            )
-        val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
-            analyzer.analyze(
-                project,
-                ignoreConfigurations.get(),
-                yellowAfterMonths.get(),
-                redAfterMonths.get(),
-                knownStableGroups.get(),
+            analyzeDependencies(
+                project = project,
+                httpClient = httpClient,
+                rateLimitState = githubRateLimitService.get(),
+                config =
+                    DependencyAnalysisConfig(
+                        pomBaseUrl = pomBaseUrl.get(),
+                        githubApiBaseUrl = githubApiBaseUrl.get(),
+                        githubToken = githubToken.orNull,
+                        retryDelayMs = retryDelayMs.get(),
+                        ignoreConfigurations = ignoreConfigurations.get(),
+                        yellowAfterMonths = yellowAfterMonths.get(),
+                        redAfterMonths = redAfterMonths.get(),
+                        knownStableGroups = knownStableGroups.get(),
+                    ),
             )
         ReportPrinter.print(results, outputLevel = outputLevel)
 
