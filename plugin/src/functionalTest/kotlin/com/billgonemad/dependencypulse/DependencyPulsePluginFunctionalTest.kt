@@ -38,6 +38,7 @@ class DependencyPulsePluginFunctionalTest {
     private fun mavenDispatcher(
         latestVersion: String,
         lastModifiedEpochMs: Long,
+        scmUrl: String? = null,
     ): Dispatcher =
         object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse =
@@ -51,7 +52,18 @@ class DependencyPulsePluginFunctionalTest {
                         DateTimeFormatter.RFC_1123_DATE_TIME.format(
                             Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
                         )
-                    MockResponse().setBody("<project></project>").setHeader("Last-Modified", httpDate)
+                    val scmFragment = scmUrl?.let { "<scm><url>$it</url></scm>" }.orEmpty()
+                    MockResponse().setBody("<project>$scmFragment</project>").setHeader("Last-Modified", httpDate)
+                }
+        }
+
+    private fun githubDispatcher(pushedAt: String): Dispatcher =
+        object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse =
+                if (request.path?.endsWith("/commits?per_page=1") == true) {
+                    MockResponse().setBody("""[{"commit":{"committer":{"date":"$pushedAt"}}}]""")
+                } else {
+                    MockResponse().setBody("""{"archived":false,"pushed_at":"$pushedAt"}""")
                 }
         }
 
@@ -104,33 +116,15 @@ class DependencyPulsePluginFunctionalTest {
     @Test fun `Maven and GitHub requests are routed to their own configured base URLs`() {
         val pushedAt = Instant.now().toString()
         server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse =
-                    if (request.path?.endsWith("maven-metadata.xml") == true) {
-                        MockResponse().setBody(
-                            "<metadata><versioning><latest>2.0.16</latest>" +
-                                "<versions><version>2.0.16</version></versions></versioning></metadata>",
-                        )
-                    } else {
-                        MockResponse().setBody(
-                            "<project><scm><url>https://github.com/example-owner/example-repo</url></scm></project>",
-                        )
-                    }
-            }
+            mavenDispatcher(
+                "2.0.16",
+                System.currentTimeMillis(),
+                scmUrl = "https://github.com/example-owner/example-repo",
+            )
 
-        val githubServer = MockWebServer()
-        githubServer.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse =
-                    if (request.path?.endsWith("/commits?per_page=1") == true) {
-                        MockResponse().setBody("""[{"commit":{"committer":{"date":"$pushedAt"}}}]""")
-                    } else {
-                        MockResponse().setBody("""{"archived":false,"pushed_at":"$pushedAt"}""")
-                    }
-            }
-        githubServer.start()
+        MockWebServer().apply { dispatcher = githubDispatcher(pushedAt) }.use { githubServer ->
+            githubServer.start()
 
-        try {
             settingsFile.writeText("rootProject.name = 'test-project'")
             buildFile.writeText(
                 """
@@ -159,11 +153,10 @@ class DependencyPulsePluginFunctionalTest {
                     ).build()
 
             assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+            assertTrue(result.output.contains("1 green"), "expected the Maven-side fetch to succeed (1 green)")
             val githubRequest = githubServer.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             assertNotNull(githubRequest, "expected a request to the GitHub mock server, but none arrived")
             assertTrue(githubRequest.path?.startsWith("/repos/example-owner/example-repo") == true)
-        } finally {
-            githubServer.shutdown()
         }
     }
 
