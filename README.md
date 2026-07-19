@@ -11,6 +11,18 @@ repo is archived or has gone quiet. It classifies each dependency as green
 build or on demand to catch forgotten dependencies before they become a
 maintenance problem.
 
+## Why dependency-pulse
+
+Tools like [gradle-versions-plugin](https://github.com/ben-manes/gradle-versions-plugin)
+tell you when a newer version exists, and [OWASP dependency-check](https://owasp.org/www-project-dependency-check/)
+flags known CVEs — but neither tells you a dependency has been *abandoned*. A
+dependency can be at its latest version and CVE-free while its upstream
+project is dead: no releases in years, the GitHub repo archived or gone
+quiet. dependency-pulse detects that signal specifically — staleness plus
+GitHub activity/archival status — so you catch a dependency going
+unmaintained before it becomes a real problem: a security fix that will never
+ship, or an API that will never adapt to your next JDK or framework upgrade.
+
 ## Sample Output
 
 Shown with `--show-green` for illustration — by default, plain GREEN
