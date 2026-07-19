@@ -6,7 +6,6 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.options.Option
 import org.gradle.work.DisableCachingByDefault
@@ -55,8 +54,7 @@ abstract class DependencyPulseTask : DefaultTask() {
     @get:Input
     abstract val retryDelayMs: Property<Long>
 
-    @get:Input
-    @get:Optional
+    @get:Internal
     abstract val githubToken: Property<String>
 
     @get:Internal
