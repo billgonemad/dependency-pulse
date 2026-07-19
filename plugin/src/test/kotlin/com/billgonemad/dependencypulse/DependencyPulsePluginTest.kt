@@ -1,5 +1,7 @@
 package com.billgonemad.dependencypulse
 
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.testfixtures.ProjectBuilder
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -75,6 +77,17 @@ class DependencyPulsePluginTest {
 
         val task = project.tasks.getByName("dependencyPulse") as DependencyPulseTask
         assertEquals("my-token", task.githubToken.get())
+    }
+
+    @Test fun `githubToken is not tracked as a task input`() {
+        val getter = DependencyPulseTask::class.java.getMethod("getGithubToken")
+
+        assertNull(
+            getter.getAnnotation(Input::class.java),
+            "githubToken is a secret and must not be @Input — Gradle persists tracked inputs " +
+                "into the configuration cache and Build Scan diagnostics",
+        )
+        assertNotNull(getter.getAnnotation(Internal::class.java))
     }
 
     @Test fun `pomBaseUrl and githubApiBaseUrl default to the real APIs`() {
