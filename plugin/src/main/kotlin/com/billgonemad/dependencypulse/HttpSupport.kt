@@ -13,6 +13,12 @@ internal const val DEFAULT_HTTP_TIMEOUT_SECONDS = 10L
 
 internal val DEFAULT_JSON = Json { ignoreUnknownKeys = true }
 
+internal fun newDefaultHttpClient(): HttpClient =
+    HttpClient
+        .newBuilder()
+        .followRedirects(HttpClient.Redirect.NORMAL)
+        .build()
+
 internal sealed class SafeGetResult {
     data class Success(
         val response: HttpResponse<String>,

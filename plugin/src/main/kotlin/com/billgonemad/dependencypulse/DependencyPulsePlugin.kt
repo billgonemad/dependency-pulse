@@ -16,14 +16,9 @@ class DependencyPulsePlugin : Plugin<Project> {
                 "githubRateLimitService",
                 GitHubRateLimitService::class.java,
             ) {}
-        val httpClientService =
-            project.gradle.sharedServices.registerIfAbsent(
-                "httpClientService",
-                HttpClientService::class.java,
-            ) {}
 
         project.tasks.register("dependencyPulse", DependencyPulseTask::class.java) { task ->
-            configureTask(task, project, ext, rateLimitService, httpClientService)
+            configureTask(task, project, ext, rateLimitService)
         }
 
         project.afterEvaluate {
@@ -59,7 +54,6 @@ class DependencyPulsePlugin : Plugin<Project> {
         project: Project,
         ext: DependencyPulseExtension,
         rateLimitService: Provider<GitHubRateLimitService>,
-        httpClientService: Provider<HttpClientService>,
     ) {
         task.pomBaseUrl.set(
             project.providers
@@ -88,7 +82,5 @@ class DependencyPulsePlugin : Plugin<Project> {
         task.githubToken.set(ext.githubToken)
         task.githubRateLimitService.set(rateLimitService)
         task.usesService(rateLimitService)
-        task.httpClientService.set(httpClientService)
-        task.usesService(httpClientService)
     }
 }

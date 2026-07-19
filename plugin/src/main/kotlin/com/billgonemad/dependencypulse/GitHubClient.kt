@@ -39,7 +39,7 @@ internal interface RateLimitState {
 
 open class GitHubClient internal constructor(
     private val baseUrl: String = "https://api.github.com",
-    private val httpClient: HttpClient = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build(),
+    private val httpClient: HttpClient = HttpClientProvider.httpClient,
     private val token: String? = null,
     private val retryDelayMs: Long = 1_000L,
     private val rateLimitState: RateLimitState = RateLimitState.local(),

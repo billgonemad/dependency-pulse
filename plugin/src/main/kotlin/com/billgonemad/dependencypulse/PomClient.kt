@@ -18,7 +18,7 @@ internal fun normalizeGitHubUrl(rawUrl: String?): String? {
 
 open class PomClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
-    private val httpClient: HttpClient = HttpClient.newBuilder().build(),
+    private val httpClient: HttpClient = HttpClientProvider.httpClient,
 ) {
     open fun fetchGitHubRepo(
         group: String,

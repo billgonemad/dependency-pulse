@@ -13,8 +13,10 @@ import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class DependencyPulsePluginFunctionalTest {
@@ -22,6 +24,7 @@ class DependencyPulsePluginFunctionalTest {
         private const val THREE_YEARS_MS = 3L * 365 * 24 * 3600 * 1000
         private const val HTTP_503 = 503
         private const val HTTP_404 = 404
+        private const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
     }
 
     @field:TempDir
@@ -96,6 +99,72 @@ class DependencyPulsePluginFunctionalTest {
         assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
         assertTrue(result.output.contains("dependencies scanned"))
+    }
+
+    @Test fun `Maven and GitHub requests are routed to their own configured base URLs`() {
+        val pushedAt = Instant.now().toString()
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    if (request.path?.endsWith("maven-metadata.xml") == true) {
+                        MockResponse().setBody(
+                            "<metadata><versioning><latest>2.0.16</latest>" +
+                                "<versions><version>2.0.16</version></versions></versioning></metadata>",
+                        )
+                    } else {
+                        MockResponse().setBody(
+                            "<project><scm><url>https://github.com/example-owner/example-repo</url></scm></project>",
+                        )
+                    }
+            }
+
+        val githubServer = MockWebServer()
+        githubServer.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    if (request.path?.endsWith("/commits?per_page=1") == true) {
+                        MockResponse().setBody("""[{"commit":{"committer":{"date":"$pushedAt"}}}]""")
+                    } else {
+                        MockResponse().setBody("""{"archived":false,"pushed_at":"$pushedAt"}""")
+                    }
+            }
+        githubServer.start()
+
+        try {
+            settingsFile.writeText("rootProject.name = 'test-project'")
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                repositories { mavenCentral() }
+                dependencies {
+                    compileOnly 'org.slf4j:slf4j-api:2.0.16'
+                }
+                """.trimIndent(),
+            )
+
+            val result =
+                GradleRunner
+                    .create()
+                    .withProjectDir(projectDir)
+                    .withPluginClasspath()
+                    .withCompatGradleVersion()
+                    .withArguments(
+                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                        "-DgithubApiBaseUrl=http://${githubServer.hostName}:${githubServer.port}",
+                        "dependencyPulse",
+                        "--show-green",
+                    ).build()
+
+            assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+            val githubRequest = githubServer.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            assertNotNull(githubRequest, "expected a request to the GitHub mock server, but none arrived")
+            assertTrue(githubRequest.path?.startsWith("/repos/example-owner/example-repo") == true)
+        } finally {
+            githubServer.shutdown()
+        }
     }
 
     @Test fun `default output hides GREEN dependencies that --show-green would reveal`() {
