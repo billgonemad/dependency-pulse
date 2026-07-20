@@ -101,4 +101,31 @@ class ScoringTest {
         val github = GitHubSignals.Found(lastCommitDate = now, isArchived = false)
         assertEquals(DepStatus.RED, score(null, github, 12, 24))
     }
+
+    @Test fun `combineStatuses ranks RED above UNKNOWN regardless of argument order`() {
+        assertEquals(DepStatus.RED, combineStatuses(DepStatus.RED, DepStatus.UNKNOWN))
+        assertEquals(DepStatus.RED, combineStatuses(DepStatus.UNKNOWN, DepStatus.RED))
+    }
+
+    @Test fun `combineStatuses ranks YELLOW above UNKNOWN regardless of argument order`() {
+        assertEquals(DepStatus.YELLOW, combineStatuses(DepStatus.YELLOW, DepStatus.UNKNOWN))
+        assertEquals(DepStatus.YELLOW, combineStatuses(DepStatus.UNKNOWN, DepStatus.YELLOW))
+    }
+
+    @Test fun `combineStatuses ranks UNKNOWN above GREEN regardless of argument order`() {
+        assertEquals(DepStatus.UNKNOWN, combineStatuses(DepStatus.UNKNOWN, DepStatus.GREEN))
+        assertEquals(DepStatus.UNKNOWN, combineStatuses(DepStatus.GREEN, DepStatus.UNKNOWN))
+    }
+
+    @Test fun `combineStatuses preserves RED above YELLOW above GREEN`() {
+        assertEquals(DepStatus.RED, combineStatuses(DepStatus.RED, DepStatus.GREEN))
+        assertEquals(DepStatus.RED, combineStatuses(DepStatus.YELLOW, DepStatus.RED))
+        assertEquals(DepStatus.YELLOW, combineStatuses(DepStatus.YELLOW, DepStatus.GREEN))
+    }
+
+    @Test fun `combineStatuses is reflexive for equal statuses`() {
+        for (status in DepStatus.entries) {
+            assertEquals(status, combineStatuses(status, status))
+        }
+    }
 }
