@@ -50,8 +50,27 @@ fun score(
 ): DepStatus {
     val mavenStatus = mavenStatus(mavenSignals, yellowMonths, redMonths)
     val githubStatus = githubStatus(githubSignals, yellowMonths, redMonths)
-    return maxOf(mavenStatus, githubStatus)
+    return combineStatuses(mavenStatus, githubStatus)
 }
+
+internal fun combineStatuses(
+    a: DepStatus,
+    b: DepStatus,
+): DepStatus = if (severityOf(a) >= severityOf(b)) a else b
+
+private const val SEVERITY_GREEN = 0
+private const val SEVERITY_UNKNOWN = 1
+private const val SEVERITY_YELLOW = 2
+private const val SEVERITY_RED = 3
+
+// Exhaustive `when` (no else) — a future DepStatus left unranked fails the build, not silently mis-sorts.
+private fun severityOf(status: DepStatus): Int =
+    when (status) {
+        DepStatus.GREEN -> SEVERITY_GREEN
+        DepStatus.UNKNOWN -> SEVERITY_UNKNOWN
+        DepStatus.YELLOW -> SEVERITY_YELLOW
+        DepStatus.RED -> SEVERITY_RED
+    }
 
 private fun mavenStatus(
     signals: MavenSignals?,
