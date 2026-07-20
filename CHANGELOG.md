@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/billgonemad/dependency-pulse/compare/v0.6.0...v0.7.0) (2026-07-20)
+
+
+### Features
+
+* add --summary-only/--show-green output verbosity controls ([#72](https://github.com/billgonemad/dependency-pulse/issues/72)) ([5c42d4b](https://github.com/billgonemad/dependency-pulse/commit/5c42d4bbf2d268ddcc5d81b57f4547a02ac6be44))
+
+
+### Bug Fixes
+
+* close the HttpClient after each dependencyPulse run ([#83](https://github.com/billgonemad/dependency-pulse/issues/83)) ([d0fa1ff](https://github.com/billgonemad/dependency-pulse/commit/d0fa1ffeed07581ebeedf16022ea139a894d16ee))
+* mark githubToken @Internal instead of @Input ([#82](https://github.com/billgonemad/dependency-pulse/issues/82)) ([e117761](https://github.com/billgonemad/dependency-pulse/commit/e117761adc8c5a131817aee79c8d31f82c2a7efa)), closes [#76](https://github.com/billgonemad/dependency-pulse/issues/76)
+* replace ordinal DepStatus merge with explicit severity ranking ([#85](https://github.com/billgonemad/dependency-pulse/issues/85)) ([0fb04ac](https://github.com/billgonemad/dependency-pulse/commit/0fb04acbb3966db1b07cfe9b1fccb62fbbb543c9)), closes [#77](https://github.com/billgonemad/dependency-pulse/issues/77)
+
 ## [0.6.0](https://github.com/billgonemad/dependency-pulse/compare/v0.5.2...v0.6.0) (2026-07-14)
 
 
