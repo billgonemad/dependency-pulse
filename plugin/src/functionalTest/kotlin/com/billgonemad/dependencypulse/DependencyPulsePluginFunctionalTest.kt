@@ -212,6 +212,57 @@ class DependencyPulsePluginFunctionalTest {
         }
     }
 
+    @Test fun `a dependency only resolvable via a second declared repo is reported using that repo's data`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
+            }
+
+        MockWebServer().apply { dispatcher = mavenDispatcher("9.9.9", System.currentTimeMillis()) }.use { secondServer ->
+            secondServer.start()
+
+            settingsFile.writeText("rootProject.name = 'test-project'")
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                repositories {
+                    maven {
+                        url = uri("http://${server.hostName}:${server.port}")
+                        allowInsecureProtocol = true
+                    }
+                    maven {
+                        url = uri("http://${secondServer.hostName}:${secondServer.port}")
+                        allowInsecureProtocol = true
+                    }
+                }
+                dependencies {
+                    compileOnly 'org.slf4j:slf4j-api:2.0.16'
+                }
+                """.trimIndent(),
+            )
+
+            val result =
+                GradleRunner
+                    .create()
+                    .withProjectDir(projectDir)
+                    .withPluginClasspath()
+                    .withCompatGradleVersion()
+                    .withArguments(
+                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                        "dependencyPulse",
+                        "--show-green",
+                    ).build()
+
+            assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+            assertTrue(result.output.contains("9.9.9"), "expected the second repo's version to win:\n${result.output}")
+            assertTrue(result.output.contains("1 green"))
+        }
+    }
+
     @Test fun `default output hides GREEN dependencies that --show-green would reveal`() {
         settingsFile.writeText("rootProject.name = 'test-project'")
         buildFile.writeText(
