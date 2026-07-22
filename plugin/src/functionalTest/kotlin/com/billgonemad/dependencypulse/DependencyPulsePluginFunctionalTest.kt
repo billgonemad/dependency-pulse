@@ -62,12 +62,17 @@ class DependencyPulsePluginFunctionalTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
                 return when {
-                    path.endsWith("maven-metadata.xml") && serveMetadata ->
+                    path.endsWith("maven-metadata.xml") && serveMetadata -> {
                         MockResponse().setBody(
                             "<metadata><versioning><latest>$latestVersion</latest>" +
                                 "<versions><version>$latestVersion</version></versions></versioning></metadata>",
                         )
-                    path.endsWith(".jar") -> MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES))
+                    }
+
+                    path.endsWith(".jar") -> {
+                        MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES))
+                    }
+
                     path.endsWith(".pom") -> {
                         val httpDate =
                             DateTimeFormatter.RFC_1123_DATE_TIME.format(
@@ -92,13 +97,16 @@ class DependencyPulsePluginFunctionalTest {
                                     "<version>$version</version>$scmFragment</project>",
                             ).setHeader("Last-Modified", httpDate)
                     }
+
                     // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
                     // files before falling back to the .pom alone; a clean 404 here is what makes
                     // it fall back cleanly. Serving 200+XML for these (as an earlier version of
                     // this dispatcher did) makes Gradle try to parse the response as real module
                     // metadata, fail, and silently drop the dependency via lenient resolution —
                     // this was verified in a spike; a real repository behaves the same way.
-                    else -> MockResponse().setResponseCode(HTTP_404)
+                    else -> {
+                        MockResponse().setResponseCode(HTTP_404)
+                    }
                 }
             }
         }

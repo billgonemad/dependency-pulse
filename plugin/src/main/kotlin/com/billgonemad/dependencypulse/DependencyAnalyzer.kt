@@ -95,7 +95,7 @@ class DependencyAnalyzer(
         val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
         val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
         return when (walkResult) {
-            is WalkResult.Found ->
+            is WalkResult.Found -> {
                 DependencyInfo(
                     group = group,
                     artifact = artifact,
@@ -107,7 +107,9 @@ class DependencyAnalyzer(
                     errorMessage = null,
                     knownStable = knownStable,
                 )
-            WalkResult.NotPublished ->
+            }
+
+            WalkResult.NotPublished -> {
                 DependencyInfo(
                     group = group,
                     artifact = artifact,
@@ -119,7 +121,9 @@ class DependencyAnalyzer(
                     errorMessage = null,
                     knownStable = knownStable,
                 )
-            is WalkResult.Unresolvable ->
+            }
+
+            is WalkResult.Unresolvable -> {
                 DependencyInfo(
                     group = group,
                     artifact = artifact,
@@ -131,6 +135,7 @@ class DependencyAnalyzer(
                     errorMessage = walkResult.message,
                     knownStable = knownStable,
                 )
+            }
         }
     }
 
@@ -153,7 +158,9 @@ class DependencyAnalyzer(
                     }
                     if (mavenStatus(attempt.signals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN) break
                 }
-                RepoAttempt.NotFound -> Unit
+
+                RepoAttempt.NotFound -> {}
+
                 is RepoAttempt.Threw -> {
                     anyThrew = true
                     if (firstError == null) firstError = attempt.message
