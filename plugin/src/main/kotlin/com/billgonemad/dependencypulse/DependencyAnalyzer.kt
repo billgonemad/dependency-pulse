@@ -69,12 +69,13 @@ class DependencyAnalyzer(
         knownStableGroups: List<String>,
     ): List<DependencyInfo> {
         val coords = resolver(project, ignoreConfigurations).sortedWith(compareBy({ it.group }, { it.artifact }))
+        val repoUrls = buildRepoUrls(client.baseUrl, project.repositories)
         val executor = Executors.newFixedThreadPool(minOf(CONCURRENCY, maxOf(coords.size, 1)))
         return try {
             coords
                 .map { coord ->
                     executor.submit(
-                        Callable { analyzeOne(coord, yellowAfterMonths, redAfterMonths, knownStableGroups) },
+                        Callable { analyzeOne(coord, repoUrls, yellowAfterMonths, redAfterMonths, knownStableGroups) },
                     )
                 }.map { it.get() }
         } finally {
@@ -84,6 +85,7 @@ class DependencyAnalyzer(
 
     private fun analyzeOne(
         coord: Coords,
+        repoUrls: List<String>,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
         knownStableGroups: List<String>,
@@ -91,34 +93,91 @@ class DependencyAnalyzer(
         val (group, artifact, version) = coord
         val githubSignals = resolveGithubSignals(group, artifact, version)
         val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
-        return try {
-            val signals = client.fetchSignals(group, artifact, version)
-            DependencyInfo(
-                group = group,
-                artifact = artifact,
-                currentVersion = version,
-                mavenSignals = signals,
-                githubSignals = githubSignals,
-                javaxBlocker = false,
-                status = score(signals, githubSignals, yellowAfterMonths, redAfterMonths),
-                errorMessage = null,
-                knownStable = knownStable,
-            )
-        } catch (
-            @Suppress("TooGenericExceptionCaught") e: Exception,
-        ) {
-            DependencyInfo(
-                group = group,
-                artifact = artifact,
-                currentVersion = version,
-                mavenSignals = null,
-                githubSignals = githubSignals,
-                javaxBlocker = false,
-                status = DepStatus.UNKNOWN,
-                errorMessage = e.message,
-                knownStable = knownStable,
-            )
+        val walkResult = walkRepos(group, artifact, version, repoUrls, yellowAfterMonths, redAfterMonths)
+        return when (walkResult) {
+            is WalkResult.Found ->
+                DependencyInfo(
+                    group = group,
+                    artifact = artifact,
+                    currentVersion = version,
+                    mavenSignals = walkResult.signals,
+                    githubSignals = githubSignals,
+                    javaxBlocker = false,
+                    status = score(walkResult.signals, githubSignals, yellowAfterMonths, redAfterMonths),
+                    errorMessage = null,
+                    knownStable = knownStable,
+                )
+            WalkResult.NotPublished ->
+                DependencyInfo(
+                    group = group,
+                    artifact = artifact,
+                    currentVersion = version,
+                    mavenSignals = null,
+                    githubSignals = githubSignals,
+                    javaxBlocker = false,
+                    status = score(null, githubSignals, yellowAfterMonths, redAfterMonths),
+                    errorMessage = null,
+                    knownStable = knownStable,
+                )
+            is WalkResult.Unresolvable ->
+                DependencyInfo(
+                    group = group,
+                    artifact = artifact,
+                    currentVersion = version,
+                    mavenSignals = null,
+                    githubSignals = githubSignals,
+                    javaxBlocker = false,
+                    status = DepStatus.UNKNOWN,
+                    errorMessage = walkResult.message,
+                    knownStable = knownStable,
+                )
         }
+    }
+
+    private fun walkRepos(
+        group: String,
+        artifact: String,
+        version: String,
+        repoUrls: List<String>,
+        yellowAfterMonths: Int,
+        redAfterMonths: Int,
+    ): WalkResult {
+        var bestSignals: MavenSignals? = null
+        var anyThrew = false
+        var firstError: String? = null
+        for (repoUrl in repoUrls) {
+            try {
+                val signals = client.fetchSignals(group, artifact, version, repoUrl)
+                if (signals != null) {
+                    if (bestSignals == null || signals.latestReleaseDate.isAfter(bestSignals.latestReleaseDate)) {
+                        bestSignals = signals
+                    }
+                    if (mavenStatus(signals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN) break
+                }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                anyThrew = true
+                if (firstError == null) firstError = e.message
+            }
+        }
+        return when {
+            bestSignals != null -> WalkResult.Found(bestSignals)
+            !anyThrew -> WalkResult.NotPublished
+            else -> WalkResult.Unresolvable(firstError)
+        }
+    }
+
+    private sealed class WalkResult {
+        data class Found(
+            val signals: MavenSignals,
+        ) : WalkResult()
+
+        object NotPublished : WalkResult()
+
+        data class Unresolvable(
+            val message: String?,
+        ) : WalkResult()
     }
 
     private fun resolveGithubSignals(

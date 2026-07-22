@@ -28,7 +28,7 @@ private val RETRYABLE_CODES =
 private const val DISALLOW_DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl"
 
 open class MavenMetadataClient(
-    private val baseUrl: String = "https://repo1.maven.org/maven2",
+    internal val baseUrl: String = "https://repo1.maven.org/maven2",
     private val httpClient: HttpClient = HttpClientProvider.httpClient,
     private val retryDelayMs: Long = 1_000L,
 ) {

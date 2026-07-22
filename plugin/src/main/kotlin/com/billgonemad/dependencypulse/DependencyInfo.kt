@@ -72,7 +72,7 @@ private fun severityOf(status: DepStatus): Int =
         DepStatus.RED -> SEVERITY_RED
     }
 
-private fun mavenStatus(
+internal fun mavenStatus(
     signals: MavenSignals?,
     yellowMonths: Int,
     redMonths: Int,
