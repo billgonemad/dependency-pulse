@@ -46,12 +46,18 @@ class DependencyPulsePluginFunctionalTest {
         latestVersion: String,
         lastModifiedEpochMs: Long,
         scmUrl: String? = null,
+        // false for a "healthy" repo that exists solely so Gradle's own dependency resolution
+        // doesn't drop the coordinate (see the two failOn* tests below) but must NOT itself supply
+        // real Maven signals to the plugin's walk loop — Gradle never needs maven-metadata.xml to
+        // resolve a fixed (non-range, non-SNAPSHOT) version, so 404-ing it here doesn't affect
+        // Gradle's resolution, only the plugin's own fetchSignals call against this repo.
+        serveMetadata: Boolean = true,
     ): Dispatcher =
         object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
                 return when {
-                    path.endsWith("maven-metadata.xml") ->
+                    path.endsWith("maven-metadata.xml") && serveMetadata ->
                         MockResponse().setBody(
                             "<metadata><versioning><latest>$latestVersion</latest>" +
                                 "<versions><version>$latestVersion</version></versions></versioning></metadata>",
@@ -282,8 +288,12 @@ class DependencyPulsePluginFunctionalTest {
         // artifacts for Gradle's own dependency resolution or the dependency never reaches
         // analyzeOne at all (lenient resolution just drops it, and there'd be nothing to fail
         // on). A second, healthy mock server backs repositories {} instead; pomBaseUrl still
-        // points at the broken one.
-        MockWebServer().apply { dispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis()) }.use { repoServer ->
+        // points at the broken one. serveMetadata=false keeps this repo out of the walk loop's
+        // own data (it 404s maven-metadata.xml) while still serving .jar/.pom so Gradle's real
+        // dependency resolution succeeds — otherwise the walk loop would find real, fresh data
+        // here and report GREEN instead of the UNKNOWN this test expects.
+        val repoDispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis(), serveMetadata = false)
+        MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
             repoServer.start()
 
             settingsFile.writeText("rootProject.name = 'test-project'")
@@ -469,8 +479,10 @@ class DependencyPulsePluginFunctionalTest {
         // See the comment in `failOnError causes build failure when Maven Central returns an
         // error` above: server 404s every path, so repositories {} needs a separate, healthy
         // mock server or Gradle's own dependency resolution drops the coordinate before the
-        // plugin ever sees it.
-        MockWebServer().apply { dispatcher = mavenDispatcher("3.0.0", System.currentTimeMillis()) }.use { repoServer ->
+        // plugin ever sees it. serveMetadata=false keeps this repo out of the walk loop's own
+        // data for the same reason as that test.
+        val repoDispatcher = mavenDispatcher("3.0.0", System.currentTimeMillis(), serveMetadata = false)
+        MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
             repoServer.start()
 
             settingsFile.writeText("rootProject.name = 'test-project'")
