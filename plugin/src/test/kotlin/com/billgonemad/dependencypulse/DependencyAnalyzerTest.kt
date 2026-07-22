@@ -20,6 +20,7 @@ class DependencyAnalyzerTest {
                 group: String,
                 artifact: String,
                 currentVersion: String,
+                baseUrl: String,
             ) = signals
         }
 
@@ -29,6 +30,7 @@ class DependencyAnalyzerTest {
                 group: String,
                 artifact: String,
                 currentVersion: String,
+                baseUrl: String,
             ): MavenSignals? = error("simulated network failure")
         }
 
@@ -218,6 +220,7 @@ class DependencyAnalyzerTest {
                     group: String,
                     artifact: String,
                     currentVersion: String,
+                    baseUrl: String,
                 ): MavenSignals? {
                     Thread.sleep(delayMs)
                     return greenSignals

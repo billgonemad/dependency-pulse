@@ -39,16 +39,21 @@ open class MavenMetadataClient(
         group: String,
         artifact: String,
         currentVersion: String,
+        baseUrl: String = this.baseUrl,
     ): MavenSignals? {
-        val metadata = fetchMetadata(group, artifact) ?: return null
+        val metadata = fetchMetadata(group, artifact, baseUrl) ?: return null
         return selectLatestVersion(metadata.latest, metadata.orderedVersions, currentVersion)?.let { selected ->
-            MavenSignals(latestVersion = selected, latestReleaseDate = fetchLastModified(group, artifact, selected))
+            MavenSignals(
+                latestVersion = selected,
+                latestReleaseDate = fetchLastModified(group, artifact, selected, baseUrl),
+            )
         }
     }
 
     private fun fetchMetadata(
         group: String,
         artifact: String,
+        baseUrl: String,
     ): ArtifactMetadata? {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/maven-metadata.xml"
         metadataCache[url]?.let { return it }
@@ -65,6 +70,7 @@ open class MavenMetadataClient(
         group: String,
         artifact: String,
         version: String,
+        baseUrl: String,
     ): Instant {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
         lastModifiedCache[url]?.let { return it }
