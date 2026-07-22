@@ -27,6 +27,11 @@ class DependencyPulsePluginFunctionalTest {
         private const val HTTP_404 = 404
         private const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
 
+        // Standard Maven layout: .../{group-with-slashes}/{artifactId}/{version}/{artifactId}-{version}.pom
+        // — counting back from the end of the split path, version is 2nd-to-last, artifactId 3rd-to-last.
+        private const val VERSION_SEGMENT_FROM_END = 2
+        private const val ARTIFACT_ID_SEGMENT_FROM_END = 3
+
         // Minimal valid empty ZIP (End Of Central Directory record, zero entries) — enough for
         // Gradle's lenient artifact resolution to accept a .jar response; fixtures declare no
         // .java source, so nothing ever compiles against the jar's actual bytecode contents.
@@ -77,9 +82,10 @@ class DependencyPulsePluginFunctionalTest {
                         // rather than hardcoded, so this dispatcher works for any coordinate a
                         // test declares without adding parameters.
                         val segments = path.removePrefix("/").split("/")
-                        val version = segments[segments.size - 2]
-                        val artifactId = segments[segments.size - 3]
-                        val groupId = segments.subList(0, segments.size - 3).joinToString(".")
+                        val version = segments[segments.size - VERSION_SEGMENT_FROM_END]
+                        val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
+                        val groupId =
+                            segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
                         MockResponse()
                             .setBody(
                                 "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
@@ -218,7 +224,8 @@ class DependencyPulsePluginFunctionalTest {
                 override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
             }
 
-        MockWebServer().apply { dispatcher = mavenDispatcher("9.9.9", System.currentTimeMillis()) }.use { secondServer ->
+        val secondDispatcher = mavenDispatcher("9.9.9", System.currentTimeMillis())
+        MockWebServer().apply { dispatcher = secondDispatcher }.use { secondServer ->
             secondServer.start()
 
             settingsFile.writeText("rootProject.name = 'test-project'")
