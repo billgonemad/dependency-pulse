@@ -4,6 +4,7 @@ import okhttp3.mockwebserver.Dispatcher
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
+import okio.Buffer
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.AfterEach
@@ -25,6 +26,12 @@ class DependencyPulsePluginFunctionalTest {
         private const val HTTP_503 = 503
         private const val HTTP_404 = 404
         private const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
+
+        // Minimal valid empty ZIP (End Of Central Directory record, zero entries) — enough for
+        // Gradle's lenient artifact resolution to accept a .jar response; fixtures declare no
+        // .java source, so nothing ever compiles against the jar's actual bytecode contents.
+        private val EMPTY_ZIP_BYTES =
+            byteArrayOf(0x50, 0x4B, 0x05, 0x06, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     }
 
     @field:TempDir
@@ -41,20 +48,47 @@ class DependencyPulsePluginFunctionalTest {
         scmUrl: String? = null,
     ): Dispatcher =
         object : Dispatcher() {
-            override fun dispatch(request: RecordedRequest): MockResponse =
-                if (request.path?.endsWith("maven-metadata.xml") == true) {
-                    MockResponse().setBody(
-                        "<metadata><versioning><latest>$latestVersion</latest>" +
-                            "<versions><version>$latestVersion</version></versions></versioning></metadata>",
-                    )
-                } else {
-                    val httpDate =
-                        DateTimeFormatter.RFC_1123_DATE_TIME.format(
-                            Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.path.orEmpty()
+                return when {
+                    path.endsWith("maven-metadata.xml") ->
+                        MockResponse().setBody(
+                            "<metadata><versioning><latest>$latestVersion</latest>" +
+                                "<versions><version>$latestVersion</version></versions></versioning></metadata>",
                         )
-                    val scmFragment = scmUrl?.let { "<scm><url>$it</url></scm>" }.orEmpty()
-                    MockResponse().setBody("<project>$scmFragment</project>").setHeader("Last-Modified", httpDate)
+                    path.endsWith(".jar") -> MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES))
+                    path.endsWith(".pom") -> {
+                        val httpDate =
+                            DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                                Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
+                            )
+                        val scmFragment = scmUrl?.let { "<scm><url>$it</url></scm>" }.orEmpty()
+                        // Gradle's real POM resolver requires groupId/artifactId/version to be
+                        // present AND to match the requested coordinate exactly (verified: a
+                        // mismatch fails with "inconsistent module metadata found", not just a
+                        // parse error) — derived here from the standard Maven layout path
+                        // (/{group-with-slashes}/{artifactId}/{version}/{artifactId}-{version}.pom)
+                        // rather than hardcoded, so this dispatcher works for any coordinate a
+                        // test declares without adding parameters.
+                        val segments = path.removePrefix("/").split("/")
+                        val version = segments[segments.size - 2]
+                        val artifactId = segments[segments.size - 3]
+                        val groupId = segments.subList(0, segments.size - 3).joinToString(".")
+                        MockResponse()
+                            .setBody(
+                                "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
+                                    "<version>$version</version>$scmFragment</project>",
+                            ).setHeader("Last-Modified", httpDate)
+                    }
+                    // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
+                    // files before falling back to the .pom alone; a clean 404 here is what makes
+                    // it fall back cleanly. Serving 200+XML for these (as an earlier version of
+                    // this dispatcher did) makes Gradle try to parse the response as real module
+                    // metadata, fail, and silently drop the dependency via lenient resolution —
+                    // this was verified in a spike; a real repository behaves the same way.
+                    else -> MockResponse().setResponseCode(HTTP_404)
                 }
+            }
         }
 
     private fun githubDispatcher(pushedAt: String): Dispatcher =
@@ -66,6 +100,18 @@ class DependencyPulsePluginFunctionalTest {
                     MockResponse().setBody("""{"archived":false,"pushed_at":"$pushedAt"}""")
                 }
         }
+
+    // Every fixture's repositories {} block points here — real jar resolution and the plugin's
+    // own metadata queries hit the same mock server, so no fixture ever touches the real internet.
+    private fun MockWebServer.repositoriesBlock(): String =
+        """
+        repositories {
+            maven {
+                url = uri("http://$hostName:$port")
+                allowInsecureProtocol = true
+            }
+        }
+        """.trimIndent()
 
     @BeforeEach
     fun setUp() {
@@ -87,7 +133,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -132,7 +178,7 @@ class DependencyPulsePluginFunctionalTest {
                     id 'java-library'
                     id 'com.billgonemad.dependency-pulse'
                 }
-                repositories { mavenCentral() }
+                ${server.repositoriesBlock()}
                 dependencies {
                     compileOnly 'org.slf4j:slf4j-api:2.0.16'
                 }
@@ -168,7 +214,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -200,7 +246,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -231,37 +277,47 @@ class DependencyPulsePluginFunctionalTest {
                 override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_503)
             }
 
-        settingsFile.writeText("rootProject.name = 'test-project'")
-        buildFile.writeText(
-            """
-            plugins {
-                id 'java-library'
-                id 'com.billgonemad.dependency-pulse'
-            }
-            repositories { mavenCentral() }
-            dependencies {
-                compileOnly 'org.slf4j:slf4j-api:2.0.16'
-            }
-            dependencyPulse {
-                failOnError = true
-            }
-            """.trimIndent(),
-        )
+        // server 503s every path, including .jar/.pom — fine for simulating "the plugin's own
+        // pomBaseUrl-directed metadata fetch fails", but repositories {} needs real, resolvable
+        // artifacts for Gradle's own dependency resolution or the dependency never reaches
+        // analyzeOne at all (lenient resolution just drops it, and there'd be nothing to fail
+        // on). A second, healthy mock server backs repositories {} instead; pomBaseUrl still
+        // points at the broken one.
+        MockWebServer().apply { dispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis()) }.use { repoServer ->
+            repoServer.start()
 
-        val result =
-            GradleRunner
-                .create()
-                .withProjectDir(projectDir)
-                .withPluginClasspath()
-                .withCompatGradleVersion()
-                .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DmavenCentralRetryDelayMs=0",
-                    "dependencyPulse",
-                ).buildAndFail()
+            settingsFile.writeText("rootProject.name = 'test-project'")
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                ${repoServer.repositoriesBlock()}
+                dependencies {
+                    compileOnly 'org.slf4j:slf4j-api:2.0.16'
+                }
+                dependencyPulse {
+                    failOnError = true
+                }
+                """.trimIndent(),
+            )
 
-        assertTrue(result.output.contains("❓"))
+            val result =
+                GradleRunner
+                    .create()
+                    .withProjectDir(projectDir)
+                    .withPluginClasspath()
+                    .withCompatGradleVersion()
+                    .withArguments(
+                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                        "-DmavenCentralRetryDelayMs=0",
+                        "dependencyPulse",
+                    ).buildAndFail()
+
+            assertTrue(result.output.contains("❓"))
+        }
     }
 
     @Test fun `runOnCheck=true wires dependencyPulse into the check lifecycle task`() {
@@ -272,7 +328,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -305,7 +361,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -341,7 +397,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
@@ -377,7 +433,7 @@ class DependencyPulsePluginFunctionalTest {
                 id 'java-library'
                 id 'com.billgonemad.dependency-pulse'
             }
-            repositories { mavenCentral() }
+            ${server.repositoriesBlock()}
             dependencies {
                 compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
             }
@@ -410,36 +466,44 @@ class DependencyPulsePluginFunctionalTest {
                 override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
             }
 
-        settingsFile.writeText("rootProject.name = 'test-project'")
-        buildFile.writeText(
-            """
-            plugins {
-                id 'java-library'
-                id 'com.billgonemad.dependency-pulse'
-            }
-            repositories { mavenCentral() }
-            dependencies {
-                compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
-            }
-            dependencyPulse {
-                failOnRed = true
-            }
-            """.trimIndent(),
-        )
+        // See the comment in `failOnError causes build failure when Maven Central returns an
+        // error` above: server 404s every path, so repositories {} needs a separate, healthy
+        // mock server or Gradle's own dependency resolution drops the coordinate before the
+        // plugin ever sees it.
+        MockWebServer().apply { dispatcher = mavenDispatcher("3.0.0", System.currentTimeMillis()) }.use { repoServer ->
+            repoServer.start()
 
-        val result =
-            GradleRunner
-                .create()
-                .withProjectDir(projectDir)
-                .withPluginClasspath()
-                .withCompatGradleVersion()
-                .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
-                    "dependencyPulse",
-                ).buildAndFail()
+            settingsFile.writeText("rootProject.name = 'test-project'")
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                ${repoServer.repositoriesBlock()}
+                dependencies {
+                    compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
+                }
+                dependencyPulse {
+                    failOnRed = true
+                }
+                """.trimIndent(),
+            )
 
-        assertTrue(result.output.contains("🔴"))
+            val result =
+                GradleRunner
+                    .create()
+                    .withProjectDir(projectDir)
+                    .withPluginClasspath()
+                    .withCompatGradleVersion()
+                    .withArguments(
+                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                        "dependencyPulse",
+                    ).buildAndFail()
+
+            assertTrue(result.output.contains("🔴"))
+        }
     }
 }
 
