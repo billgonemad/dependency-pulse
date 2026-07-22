@@ -93,7 +93,7 @@ class DependencyAnalyzer(
         val (group, artifact, version) = coord
         val githubSignals = resolveGithubSignals(group, artifact, version)
         val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
-        val walkResult = walkRepos(group, artifact, version, repoUrls, yellowAfterMonths, redAfterMonths)
+        val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
         return when (walkResult) {
             is WalkResult.Found ->
                 DependencyInfo(
@@ -135,9 +135,7 @@ class DependencyAnalyzer(
     }
 
     private fun walkRepos(
-        group: String,
-        artifact: String,
-        version: String,
+        coord: Coords,
         repoUrls: List<String>,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
@@ -146,25 +144,41 @@ class DependencyAnalyzer(
         var anyThrew = false
         var firstError: String? = null
         for (repoUrl in repoUrls) {
-            try {
-                val signals = client.fetchSignals(group, artifact, version, repoUrl)
-                if (signals != null) {
-                    if (bestSignals == null || signals.latestReleaseDate.isAfter(bestSignals.latestReleaseDate)) {
-                        bestSignals = signals
+            when (val attempt = attemptFetch(coord, repoUrl)) {
+                is RepoAttempt.Signals -> {
+                    val isFresher =
+                        bestSignals == null || attempt.signals.latestReleaseDate.isAfter(bestSignals.latestReleaseDate)
+                    if (isFresher) {
+                        bestSignals = attempt.signals
                     }
-                    if (mavenStatus(signals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN) break
+                    if (mavenStatus(attempt.signals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN) break
                 }
-            } catch (
-                @Suppress("TooGenericExceptionCaught") e: Exception,
-            ) {
-                anyThrew = true
-                if (firstError == null) firstError = e.message
+                RepoAttempt.NotFound -> Unit
+                is RepoAttempt.Threw -> {
+                    anyThrew = true
+                    if (firstError == null) firstError = attempt.message
+                }
             }
         }
         return when {
             bestSignals != null -> WalkResult.Found(bestSignals)
             !anyThrew -> WalkResult.NotPublished
             else -> WalkResult.Unresolvable(firstError)
+        }
+    }
+
+    private fun attemptFetch(
+        coord: Coords,
+        repoUrl: String,
+    ): RepoAttempt {
+        val (group, artifact, version) = coord
+        return try {
+            val signals = client.fetchSignals(group, artifact, version, repoUrl)
+            if (signals != null) RepoAttempt.Signals(signals) else RepoAttempt.NotFound
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            RepoAttempt.Threw(e.message)
         }
     }
 
@@ -178,6 +192,18 @@ class DependencyAnalyzer(
         data class Unresolvable(
             val message: String?,
         ) : WalkResult()
+    }
+
+    private sealed class RepoAttempt {
+        data class Signals(
+            val signals: MavenSignals,
+        ) : RepoAttempt()
+
+        object NotFound : RepoAttempt()
+
+        data class Threw(
+            val message: String?,
+        ) : RepoAttempt()
     }
 
     private fun resolveGithubSignals(
