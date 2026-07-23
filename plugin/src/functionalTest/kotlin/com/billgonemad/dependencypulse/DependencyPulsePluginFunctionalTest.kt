@@ -63,14 +63,15 @@ class DependencyPulsePluginFunctionalTest {
                 val path = request.path.orEmpty()
                 return when {
                     path.endsWith("maven-metadata.xml") && serveMetadata -> {
-                        MockResponse().setBody(
-                            "<metadata><versioning><latest>$latestVersion</latest>" +
-                                "<versions><version>$latestVersion</version></versions></versioning></metadata>",
-                        )
+                        MockResponse()
+                            .setBody(
+                                "<metadata><versioning><latest>$latestVersion</latest>" +
+                                    "<versions><version>$latestVersion</version></versions></versioning></metadata>",
+                            ).setHeader("Connection", "close")
                     }
 
                     path.endsWith(".jar") -> {
-                        MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES))
+                        MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
                     }
 
                     path.endsWith(".pom") -> {
@@ -96,6 +97,7 @@ class DependencyPulsePluginFunctionalTest {
                                 "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
                                     "<version>$version</version>$scmFragment</project>",
                             ).setHeader("Last-Modified", httpDate)
+                            .setHeader("Connection", "close")
                     }
 
                     // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
