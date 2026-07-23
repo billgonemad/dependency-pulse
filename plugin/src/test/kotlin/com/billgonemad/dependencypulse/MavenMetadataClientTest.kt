@@ -174,6 +174,51 @@ class MavenMetadataClientTest {
         assertEquals(2, server.requestCount)
     }
 
+    @Test fun `explicit baseUrl argument overrides the constructor default`() {
+        val secondServer = MockWebServer()
+        secondServer.start()
+        secondServer.enqueue(MockResponse().setBody(metadataBody("9.9.9", "9.9.9")))
+        secondServer.enqueue(pomResponse("Fri, 01 Aug 2025 00:00:00 GMT"))
+
+        val result =
+            client.fetchSignals(
+                "org.slf4j",
+                "slf4j-api",
+                "1.0.0",
+                baseUrl = "http://${secondServer.hostName}:${secondServer.port}",
+            )
+
+        assertNotNull(result)
+        assertEquals("9.9.9", result.latestVersion)
+        assertEquals(0, server.requestCount)
+        assertEquals(2, secondServer.requestCount)
+        secondServer.shutdown()
+    }
+
+    @Test fun `caches independently per baseUrl for the same group and artifact`() {
+        val secondServer = MockWebServer()
+        secondServer.start()
+        server.enqueue(MockResponse().setBody(metadataBody("1.0.0", "1.0.0")))
+        server.enqueue(pomResponse("Mon, 01 Jan 2024 00:00:00 GMT"))
+        secondServer.enqueue(MockResponse().setBody(metadataBody("2.0.0", "2.0.0")))
+        secondServer.enqueue(pomResponse("Tue, 01 Jul 2025 00:00:00 GMT"))
+
+        val first = client.fetchSignals("org.slf4j", "slf4j-api", "0.9.0")
+        val second =
+            client.fetchSignals(
+                "org.slf4j",
+                "slf4j-api",
+                "0.9.0",
+                baseUrl = "http://${secondServer.hostName}:${secondServer.port}",
+            )
+
+        assertNotNull(first)
+        assertNotNull(second)
+        assertEquals("1.0.0", first.latestVersion)
+        assertEquals("2.0.0", second.latestVersion)
+        secondServer.shutdown()
+    }
+
     @Test fun `selects latest stable from a mixed version list`() {
         server.enqueue(MockResponse().setBody(metadataBody("5.0.0-alpha.16", "4.11.0", "4.12.0", "5.0.0-alpha.16")))
         server.enqueue(pomResponse())
