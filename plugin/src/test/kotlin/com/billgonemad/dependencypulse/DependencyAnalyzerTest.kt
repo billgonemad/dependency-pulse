@@ -208,7 +208,7 @@ class DependencyAnalyzerTest {
         assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
     }
 
-    @Test fun `still populates githubSignals when the Maven Central lookup throws`() {
+    @Test fun `folds in an archived GitHub repo when the Maven lookup is unresolvable`() {
         val githubSignals = GitHubSignals.Found(now, isArchived = true)
         val resolver = { _: Project, _: List<String> ->
             setOf(Coords("org.example", "bad", "1.0"))
@@ -223,8 +223,8 @@ class DependencyAnalyzerTest {
 
         val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
 
-        assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertEquals(githubSignals, results[0].githubSignals)
+        assertEquals(DepStatus.RED, results[0].status)
     }
 
     @Test fun `sets knownStable when the coordinate matches a configured group prefix`() {
@@ -398,5 +398,23 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertNotNull(results[0].errorMessage)
+    }
+
+    @Test fun `stays UNKNOWN when the Maven lookup is unresolvable and GitHub has no worse signal`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val resolver = { _: Project, _: List<String> ->
+            setOf(Coords("org.example", "bad", "1.0"))
+        }
+        val analyzer =
+            DependencyAnalyzer(
+                throwingClient(),
+                stubPomClient("org/bad"),
+                stubGithubClient(githubSignals),
+                resolver,
+            )
+
+        val results = analyzer.analyze(ProjectBuilder.builder().build(), emptyList(), 12, 24, emptyList())
+
+        assertEquals(DepStatus.UNKNOWN, results[0].status)
     }
 }

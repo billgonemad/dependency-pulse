@@ -131,7 +131,7 @@ class DependencyAnalyzer(
                     mavenSignals = null,
                     githubSignals = githubSignals,
                     javaxBlocker = false,
-                    status = DepStatus.UNKNOWN,
+                    status = unresolvableStatus(githubSignals, yellowAfterMonths, redAfterMonths),
                     errorMessage = walkResult.message,
                     knownStable = knownStable,
                 )

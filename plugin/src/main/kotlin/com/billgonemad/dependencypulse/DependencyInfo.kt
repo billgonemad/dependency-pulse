@@ -81,7 +81,17 @@ internal fun mavenStatus(
     return monthsStatus(signals.latestReleaseDate, yellowMonths, redMonths)
 }
 
-private fun githubStatus(
+// For the "Maven walk couldn't resolve anything" case: UNKNOWN sits between GREEN and YELLOW in
+// severity, so combining it with githubStatus lets a real GitHub RED/YELLOW signal still surface,
+// while a GREEN/no-repo GitHub signal correctly leaves the overall verdict at UNKNOWN rather than
+// falsely implying confidence the Maven side never had.
+internal fun unresolvableStatus(
+    githubSignals: GitHubSignals,
+    yellowMonths: Int,
+    redMonths: Int,
+): DepStatus = combineStatuses(DepStatus.UNKNOWN, githubStatus(githubSignals, yellowMonths, redMonths))
+
+internal fun githubStatus(
     signals: GitHubSignals,
     yellowMonths: Int,
     redMonths: Int,
