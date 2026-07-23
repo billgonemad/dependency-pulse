@@ -209,10 +209,13 @@ the first healthy (Green) result or otherwise falling back to the freshest
 real release date found across every repository checked. This matters for
 artifacts like `org.gradle:gradle-tooling-api`, whose real release history
 lives on `repo.gradle.org` — Central alone only has one ancient entry for it,
-which would otherwise look abandoned. `mavenLocal()` and repositories that
-require credentials aren't walked — the plugin can't query a filesystem
-repository over HTTP, and authenticated-repository support isn't implemented
-yet (tracked as a follow-up). It then classifies the dependency:
+which would otherwise look abandoned. `mavenLocal()` isn't walked — the
+plugin can't query a filesystem repository over HTTP. Repositories that
+require credentials *are* walked like any other, but the plugin doesn't send
+any credentials (authenticated-repository support isn't implemented yet,
+tracked as a follow-up), so a private repository will typically fail with an
+authentication error rather than being silently skipped. It then classifies
+the dependency:
 
 | Status | Condition |
 |--------|-----------|
