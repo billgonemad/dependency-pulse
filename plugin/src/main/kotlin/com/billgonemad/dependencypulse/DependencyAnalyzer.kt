@@ -40,9 +40,9 @@ internal fun buildRepoUrls(
             .filterIsInstance<MavenArtifactRepository>()
             .filter { it.url.scheme == "http" || it.url.scheme == "https" }
             .map { it.url.toString() }
-    val all = listOf(pomBaseUrl) + declared
+    val all = (listOf(pomBaseUrl) + declared).map { it.trimEnd('/') }
     val seen = mutableSetOf<String>()
-    return all.filter { seen.add(it.trimEnd('/')) }
+    return all.filter { seen.add(it) }
 }
 
 class DependencyAnalyzer(
