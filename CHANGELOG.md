@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/billgonemad/dependency-pulse/compare/v0.7.0...v0.8.0) (2026-07-28)
+
+
+### Features
+
+* walk every declared Maven repo, not just Central, for staleness data ([#100](https://github.com/billgonemad/dependency-pulse/issues/100)) ([1f41393](https://github.com/billgonemad/dependency-pulse/commit/1f413937f589851ad0f5216ab6d292d7df4dc5a2))
+
 ## [0.7.0](https://github.com/billgonemad/dependency-pulse/compare/v0.6.0...v0.7.0) (2026-07-20)
 
 
