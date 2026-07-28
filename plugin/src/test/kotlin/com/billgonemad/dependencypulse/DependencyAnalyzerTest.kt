@@ -400,6 +400,54 @@ class DependencyAnalyzerTest {
         assertNotNull(results[0].errorMessage)
     }
 
+    @Test fun `keeps the fresher earlier result when a later declared repo returns a staler one`() {
+        // Both ages land in YELLOW under the test's 12/24-month thresholds, so the loop must
+        // exhaust the whole repo list rather than stopping early on a GREEN result.
+        val newerSignals = MavenSignals("1.1", now.minusSeconds(60L * 60 * 24 * 400))
+        val olderSignals = MavenSignals("1.0", now.minusSeconds(60L * 60 * 24 * 500))
+        val client =
+            object : MavenMetadataClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                    baseUrl: String,
+                ): MavenSignals? = if (baseUrl.endsWith("second")) olderSignals else newerSignals
+            }
+        val resolver = { _: Project, _: List<String> -> setOf(Coords("org.example", "foo", "1.0")) }
+        val analyzer = DependencyAnalyzer(client, stubPomClient(), stubGithubClient(), resolver)
+        val project = projectWithRepos("https://repo.example.com/second")
+
+        val results = analyzer.analyze(project, emptyList(), 12, 24, emptyList())
+
+        assertEquals("1.1", results[0].mavenSignals?.latestVersion)
+    }
+
+    @Test fun `keeps the first repo's error when a later repo also throws`() {
+        val client =
+            object : MavenMetadataClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                    baseUrl: String,
+                ): MavenSignals? =
+                    if (baseUrl.endsWith("second")) {
+                        error("second repo failure")
+                    } else {
+                        error("first repo failure")
+                    }
+            }
+        val resolver = { _: Project, _: List<String> -> setOf(Coords("org.example", "foo", "1.0")) }
+        val analyzer = DependencyAnalyzer(client, stubPomClient(), stubGithubClient(), resolver)
+        val project = projectWithRepos("https://repo.example.com/second")
+
+        val results = analyzer.analyze(project, emptyList(), 12, 24, emptyList())
+
+        assertEquals(DepStatus.UNKNOWN, results[0].status)
+        assertEquals("first repo failure", results[0].errorMessage)
+    }
+
     @Test fun `stays UNKNOWN when the Maven lookup is unresolvable and GitHub has no worse signal`() {
         val githubSignals = GitHubSignals.Found(now, isArchived = false)
         val resolver = { _: Project, _: List<String> ->
