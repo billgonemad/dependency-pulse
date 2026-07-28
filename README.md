@@ -4,12 +4,13 @@
 [![Release](https://img.shields.io/github/v/release/billgonemad/dependency-pulse)](https://github.com/billgonemad/dependency-pulse/releases)
 
 A Gradle plugin that checks how stale your JVM dependencies are.
-It queries Maven Central for each dependency's latest release date, and — when
-the dependency's GitHub repository can be resolved — also checks whether that
-repo is archived or has gone quiet. It classifies each dependency as green
-(active), yellow (aging), or red (abandoned/gone). Run it as part of your
-build or on demand to catch forgotten dependencies before they become a
-maintenance problem.
+It queries Maven Central for each dependency's latest release date, falling
+through to any other Maven repository your build declares if Central's data
+isn't healthy, and — when the dependency's GitHub repository can be resolved
+— also checks whether that repo is archived or has gone quiet. It classifies
+each dependency as green (active), yellow (aging), or red (abandoned/gone).
+Run it as part of your build or on demand to catch forgotten dependencies
+before they become a maintenance problem.
 
 ## Why dependency-pulse
 
@@ -200,16 +201,28 @@ dependencyPulse {
 
 ## How it works
 
-For each resolved dependency, the plugin queries Maven Central for the
-artifact's version metadata and latest release date. It then classifies the
-dependency:
+For each resolved dependency, the plugin queries Maven Central first for the
+artifact's version metadata and latest release date. If that result isn't
+healthy (not Green), it walks any other Maven repository your build's
+`repositories {}` block declares, in the order they're declared, stopping at
+the first healthy (Green) result or otherwise falling back to the freshest
+real release date found across every repository checked. This matters for
+artifacts like `org.gradle:gradle-tooling-api`, whose real release history
+lives on `repo.gradle.org` — Central alone only has one ancient entry for it,
+which would otherwise look abandoned. `mavenLocal()` isn't walked — the
+plugin can't query a filesystem repository over HTTP. Repositories that
+require credentials *are* walked like any other, but the plugin doesn't send
+any credentials (authenticated-repository support isn't implemented yet,
+tracked as a follow-up), so a private repository will typically fail with an
+authentication error rather than being silently skipped. It then classifies
+the dependency:
 
 | Status | Condition |
 |--------|-----------|
 | ✅ Green | Last release < 12 months ago |
 | ⚠️ Yellow | Last release 12–24 months ago |
-| 🔴 Red | Last release > 24 months ago, or artifact not found on Maven Central |
-| ❓ Unknown | Maven Central could not be reached |
+| 🔴 Red | Last release > 24 months ago, or artifact not found in any declared repository |
+| ❓ Unknown | A declared repository couldn't be reached, and no repository ever returned data for the artifact |
 | 📘 Spec (stable) | Matches `knownStableGroups` and real Maven data exists — shown instead of the status above, regardless of age |
 
 Thresholds are configurable. Test configurations are excluded by default.
