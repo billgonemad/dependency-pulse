@@ -464,6 +464,40 @@ class DependencyPulsePluginFunctionalTest {
         assertEquals(null, result.task(":dependencyPulse")?.outcome)
     }
 
+    @Test fun `runOnCheck=false does not wire dependencyPulse under --configuration-cache either`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                runOnCheck = false
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "check",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(null, result.task(":dependencyPulse")?.outcome)
+    }
+
     @Test fun `failOnRed causes build failure when latest release is stale`() {
         val threeYearsAgo = System.currentTimeMillis() - THREE_YEARS_MS
         server.dispatcher = mavenDispatcher("0.1", threeYearsAgo)
