@@ -1,7 +1,23 @@
 package com.billgonemad.dependencypulse
 
+import org.gradle.api.Project
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
 import org.gradle.api.artifacts.repositories.ArtifactRepository
 import org.gradle.api.artifacts.repositories.MavenArtifactRepository
+
+internal fun resolveCoordinates(
+    project: Project,
+    ignoreConfigurations: List<String>,
+): Set<Coords> =
+    project.configurations
+        .filter { it.isCanBeResolved && it.name !in ignoreConfigurations }
+        .flatMap { configuration ->
+            configuration.incoming.resolutionResult.allComponents.mapNotNull { component ->
+                (component.id as? ModuleComponentIdentifier)?.let {
+                    Coords(it.group, it.module, it.version)
+                }
+            }
+        }.toSet()
 
 internal fun buildRepoUrls(
     pomBaseUrl: String,
