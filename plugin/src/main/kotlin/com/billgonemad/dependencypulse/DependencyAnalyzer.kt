@@ -8,12 +8,6 @@ import java.util.concurrent.Executors
 
 private const val CONCURRENCY = 8
 
-internal data class Coords(
-    val group: String,
-    val artifact: String,
-    val version: String,
-)
-
 internal typealias Resolver = (project: Project, ignoreConfigurations: List<String>) -> Set<Coords>
 
 private fun defaultResolver(

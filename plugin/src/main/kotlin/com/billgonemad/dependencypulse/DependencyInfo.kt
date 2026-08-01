@@ -3,6 +3,12 @@ package com.billgonemad.dependencypulse
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
+internal data class Coords(
+    val group: String,
+    val artifact: String,
+    val version: String,
+)
+
 enum class DepStatus { GREEN, YELLOW, RED, UNKNOWN }
 
 data class MavenSignals(
