@@ -585,6 +585,54 @@ class DependencyPulsePluginFunctionalTest {
             assertTrue(result.output.contains("🔴"))
         }
     }
+
+    @Test fun `dependencyPulse runs under --configuration-cache and reuses the cache on a second run`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val firstRun =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, firstRun.task(":dependencyPulse")?.outcome)
+        assertTrue(firstRun.output.contains("Configuration cache entry stored"))
+
+        val secondRun =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, secondRun.task(":dependencyPulse")?.outcome)
+        assertTrue(secondRun.output.contains("Configuration cache entry reused"))
+    }
 }
 
 private fun GradleRunner.withCompatGradleVersion(): GradleRunner {

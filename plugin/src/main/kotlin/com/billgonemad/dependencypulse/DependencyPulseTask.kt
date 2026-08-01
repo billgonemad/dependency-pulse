@@ -4,6 +4,7 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.SetProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
@@ -59,6 +60,12 @@ abstract class DependencyPulseTask : DefaultTask() {
     @get:Internal
     abstract val githubRateLimitService: Property<GitHubRateLimitService>
 
+    @get:Internal
+    internal abstract val dependencyCoordinates: SetProperty<Coords>
+
+    @get:Internal
+    internal abstract val repoUrls: ListProperty<String>
+
     @TaskAction
     fun run() {
         val outputLevel =
@@ -86,8 +93,8 @@ abstract class DependencyPulseTask : DefaultTask() {
         val analyzer = DependencyAnalyzer(client, pomClient, githubClient)
         val results =
             analyzer.analyze(
-                project,
-                ignoreConfigurations.get(),
+                dependencyCoordinates.get(),
+                repoUrls.get(),
                 yellowAfterMonths.get(),
                 redAfterMonths.get(),
                 knownStableGroups.get(),
