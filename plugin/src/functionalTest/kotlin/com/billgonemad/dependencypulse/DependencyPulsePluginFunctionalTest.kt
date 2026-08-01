@@ -464,6 +464,10 @@ class DependencyPulsePluginFunctionalTest {
         assertEquals(null, result.task(":dependencyPulse")?.outcome)
     }
 
+    // Absence from the task graph is a proxy for "the coordinate/repo-URL providers were never
+    // realized," not a direct observation of it: tasks.register laziness means the task's
+    // configuration block (and therefore the provider wiring) only runs if the task enters the
+    // graph, so a null outcome here implies the providers were never realized either.
     @Test fun `runOnCheck=false does not wire dependencyPulse under --configuration-cache either`() {
         settingsFile.writeText("rootProject.name = 'test-project'")
         buildFile.writeText(

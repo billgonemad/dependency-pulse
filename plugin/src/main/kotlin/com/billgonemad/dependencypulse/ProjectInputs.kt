@@ -12,10 +12,16 @@ internal fun resolveCoordinates(
     project.configurations
         .filter { it.isCanBeResolved && it.name !in ignoreConfigurations }
         .flatMap { configuration ->
-            configuration.incoming.resolutionResult.allComponents.mapNotNull { component ->
-                (component.id as? ModuleComponentIdentifier)?.let {
-                    Coords(it.group, it.module, it.version)
+            try {
+                configuration.incoming.resolutionResult.allComponents.mapNotNull { component ->
+                    (component.id as? ModuleComponentIdentifier)?.let {
+                        Coords(it.group, it.module, it.version)
+                    }
                 }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") ignored: Exception,
+            ) {
+                emptyList()
             }
         }.toSet()
 

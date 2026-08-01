@@ -179,6 +179,19 @@ class ProjectInputsTest {
         assertEquals(setOf(Coords("com.example", "foo", "1.0")), coords)
     }
 
+    @Test fun `tolerates an unresolvable dependency instead of failing`() {
+        writeFixture("com.example", "foo", "1.0")
+        val project = ProjectBuilder.builder().build()
+        project.repositories.maven { it.url = repoDir.toURI() }
+        project.configurations.create("testConfig") { it.isCanBeConsumed = false }
+        project.dependencies.add("testConfig", "com.example:foo:1.0")
+        project.dependencies.add("testConfig", "com.example:doesnotexist:9.9")
+
+        val coords = resolveCoordinates(project, emptyList())
+
+        assertEquals(setOf(Coords("com.example", "foo", "1.0")), coords)
+    }
+
     @Test fun `includes BOM-platform components even though they have no jar artifact`() {
         writeFixture("com.example", "foo", "1.0")
         writeBomFixture("com.example", "bom", "1.0")

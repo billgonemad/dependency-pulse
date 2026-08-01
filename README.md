@@ -53,6 +53,7 @@ Dependency Pulse Report
 
 - Java 17+
 - Gradle 7.6+
+- Compatible with Gradle's [configuration cache](https://docs.gradle.org/current/userguide/configuration_cache.html) (`--configuration-cache`) — previously a hard failure with no workaround
 
 ## Installation
 
@@ -201,8 +202,12 @@ dependencyPulse {
 
 ## How it works
 
-For each resolved dependency, the plugin queries Maven Central first for the
-artifact's version metadata and latest release date. If that result isn't
+For each resolved dependency — including BOM/platform components resolved via
+`implementation platform(...)`, since a stale BOM is valuable signal (it can
+pin old versions for everything under it), but excluding `project()` (local
+multi-module) dependencies, which aren't published Maven coordinates — the
+plugin queries Maven Central first for the artifact's version metadata and
+latest release date. If that result isn't
 healthy (not Green), it walks any other Maven repository your build's
 `repositories {}` block declares, in the order they're declared, stopping at
 the first healthy (Green) result or otherwise falling back to the freshest

@@ -60,6 +60,11 @@ abstract class DependencyPulseTask : DefaultTask() {
     @get:Internal
     abstract val githubRateLimitService: Property<GitHubRateLimitService>
 
+    // `internal` is load-bearing here, not incidental: Coords is an internal type, and a public
+    // property can't expose it (won't compile). One consequence — Gradle diagnostics/validation
+    // messages (e.g. --info logs, CC problem reports) will show Kotlin's mangled internal-member
+    // names for these two properties (e.g. `dependencyCoordinates$<module-name>`); that's expected,
+    // not a bug.
     @get:Internal
     internal abstract val dependencyCoordinates: SetProperty<Coords>
 
