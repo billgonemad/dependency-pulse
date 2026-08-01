@@ -83,10 +83,10 @@ class DependencyPulsePlugin : Plugin<Project> {
         task.githubRateLimitService.set(rateLimitService)
         task.usesService(rateLimitService)
         task.dependencyCoordinates.set(
-            project.provider { resolveCoordinates(project, ext.ignoreConfigurations.get()) },
+            project.provider { resolveCoordinates(project, task.ignoreConfigurations.get()) },
         )
         task.repoUrls.set(
-            project.provider { buildRepoUrls(pomBaseUrl.get(), project.repositories) },
+            project.provider { buildRepoUrls(task.pomBaseUrl.get(), project.repositories) },
         )
     }
 }
