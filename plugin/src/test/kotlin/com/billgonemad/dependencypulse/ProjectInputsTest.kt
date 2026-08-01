@@ -157,8 +157,18 @@ class ProjectInputsTest {
     @Test fun `excludes project dependencies since they are not published Maven coordinates`() {
         writeFixture("com.example", "foo", "1.0")
         val childDir = File(multiProjectDir, "child").apply { mkdirs() }
-        val root = ProjectBuilder.builder().withProjectDir(multiProjectDir).withName("root").build()
-        ProjectBuilder.builder().withProjectDir(childDir).withName("child").withParent(root).build()
+        val root =
+            ProjectBuilder
+                .builder()
+                .withProjectDir(multiProjectDir)
+                .withName("root")
+                .build()
+        ProjectBuilder
+            .builder()
+            .withProjectDir(childDir)
+            .withName("child")
+            .withParent(root)
+            .build()
         root.repositories.maven { it.url = repoDir.toURI() }
         root.configurations.create("testConfig") { it.isCanBeConsumed = false }
         root.dependencies.add("testConfig", "com.example:foo:1.0")
