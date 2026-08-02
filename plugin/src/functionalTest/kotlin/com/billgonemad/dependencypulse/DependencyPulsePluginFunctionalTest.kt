@@ -75,6 +75,25 @@ class DependencyPulsePluginFunctionalTest {
                         MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
                     }
 
+                    // When this repo has no maven-metadata.xml (serveMetadata = false), it must
+                    // also withhold the currentVersion POM fallback signal introduced in 5ae983b,
+                    // which probes the POM via a HEAD request from the plugin's own HttpClient.
+                    // Gradle's own resolver ALSO issues a HEAD to this same .pom URL first (as an
+                    // existence probe, before its follow-up GETs) — verified by logging every
+                    // request's method/User-Agent during a real run — so method alone can't tell
+                    // the two apart; 404-ing every HEAD here would make Gradle's own resolution
+                    // drop the coordinate entirely (0 dependencies scanned), not just withhold the
+                    // plugin's signal. Gradle's requests carry a "Gradle/…" User-Agent; the
+                    // plugin's HttpClient carries "Java-http-client/…" — that's the only reliable
+                    // way to 404 just the plugin's HEAD probe while still letting Gradle's own
+                    // HEAD-then-GET resolution succeed against this repo.
+                    path.endsWith(".pom") &&
+                        !serveMetadata &&
+                        request.method == "HEAD" &&
+                        request.getHeader("User-Agent")?.startsWith("Gradle") != true -> {
+                        MockResponse().setResponseCode(HTTP_404)
+                    }
+
                     path.endsWith(".pom") -> {
                         val httpDate =
                             DateTimeFormatter.RFC_1123_DATE_TIME.format(
