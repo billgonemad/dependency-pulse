@@ -36,6 +36,7 @@ open class MavenMetadataClient(
     private val metadataCache = ConcurrentHashMap<String, ArtifactMetadata>()
     private val lastModifiedCache = ConcurrentHashMap<String, Instant>()
 
+    @Suppress("ReturnCount")
     open fun fetchSignals(
         group: String,
         artifact: String,
@@ -48,8 +49,8 @@ open class MavenMetadataClient(
             fetchLastModified(group, artifact, selected, baseUrl)?.let { date ->
                 return MavenSignals(latestVersion = selected, latestReleaseDate = date)
             }
+            if (selected == currentVersion) return null
         }
-        if (selected == currentVersion) return null
         return fetchLastModified(group, artifact, currentVersion, baseUrl)?.let { date ->
             MavenSignals(latestVersion = currentVersion, latestReleaseDate = date)
         }
@@ -81,13 +82,25 @@ open class MavenMetadataClient(
         lastModifiedCache[url]?.let { return it }
         val response = getWithRetry(url) { method("HEAD", HttpRequest.BodyPublishers.noBody()) }
         return when {
-            response == null -> throw IOException("Maven repository unreachable for $url")
-            response.statusCode() == HTTP_NOT_FOUND -> null
-            response.statusCode() != HTTP_OK -> throw IOException("Maven repository returned HTTP ${response.statusCode()} for $url")
-            else ->
+            response == null -> {
+                throw IOException("Maven repository unreachable for $url")
+            }
+
+            response.statusCode() == HTTP_NOT_FOUND -> {
+                null
+            }
+
+            response.statusCode() != HTTP_OK -> {
+                throw IOException("Maven repository returned HTTP ${response.statusCode()} for $url")
+            }
+
+            else -> {
                 response.headers().firstValue("Last-Modified").orElse(null)?.let { header ->
-                    Instant.from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header)).also { lastModifiedCache[url] = it }
+                    val instant = Instant.from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header))
+                    lastModifiedCache[url] = instant
+                    instant
                 }
+            }
         }
     }
 

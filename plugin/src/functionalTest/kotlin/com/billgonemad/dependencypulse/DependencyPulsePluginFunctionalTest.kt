@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -278,6 +279,96 @@ class DependencyPulsePluginFunctionalTest {
             assertTrue(result.output.contains("9.9.9"), "expected the second repo's version to win:\n${result.output}")
             assertTrue(result.output.contains("1 green"))
         }
+    }
+
+    @Test fun `selected latest POM 404ing falls back to current-version POM instead of UNKNOWN`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.path.orEmpty()
+                    return when {
+                        path.endsWith("maven-metadata.xml") -> {
+                            MockResponse()
+                                .setBody(
+                                    "<metadata><versioning><latest>9.9.9</latest>" +
+                                        "<versions><version>9.9.9</version></versions></versioning></metadata>",
+                                ).setHeader("Connection", "close")
+                        }
+
+                        path.endsWith("/9.9.9/slf4j-api-9.9.9.pom") -> {
+                            MockResponse().setResponseCode(HTTP_404)
+                        }
+
+                        path.endsWith(".jar") -> {
+                            MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
+                        }
+
+                        path.endsWith(".pom") -> {
+                            val httpDate =
+                                DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                                    Instant.now().atZone(ZoneOffset.UTC),
+                                )
+                            val segments = path.removePrefix("/").split("/")
+                            val version = segments[segments.size - VERSION_SEGMENT_FROM_END]
+                            val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
+                            val groupId =
+                                segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
+                            MockResponse()
+                                .setBody(
+                                    "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
+                                        "<version>$version</version></project>",
+                                ).setHeader("Last-Modified", httpDate)
+                                .setHeader("Connection", "close")
+                        }
+
+                        else -> {
+                            MockResponse().setResponseCode(HTTP_404)
+                        }
+                    }
+                }
+            }
+
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--show-green",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertFalse(
+            result.output.contains("❓"),
+            "expected a real status, not UNKNOWN:\n${result.output}",
+        )
+        assertFalse(
+            result.output.contains("Maven Central unavailable"),
+            "expected no UNKNOWN message:\n${result.output}",
+        )
+        assertTrue(
+            result.output.contains("Latest: 2.0.16"),
+            "expected the fallback to report currentVersion:\n${result.output}",
+        )
+        assertTrue(result.output.contains("1 green"))
     }
 
     @Test fun `default output hides GREEN dependencies that --show-green would reveal`() {
