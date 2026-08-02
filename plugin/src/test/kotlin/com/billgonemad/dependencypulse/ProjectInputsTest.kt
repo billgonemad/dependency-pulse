@@ -192,6 +192,23 @@ class ProjectInputsTest {
         assertEquals(setOf(Coords("com.example", "foo", "1.0")), coords)
     }
 
+    @Test fun `reports a configuration that throws during resolution instead of staying silent`() {
+        val project = ProjectBuilder.builder().build()
+        project.configurations.create("testConfig") {
+            it.isCanBeConsumed = false
+            it.incoming.beforeResolve { throw IllegalStateException("boom") }
+        }
+        val failures = mutableListOf<Pair<String, Throwable>>()
+
+        val coords =
+            resolveCoordinates(project, emptyList()) { configurationName, error ->
+                failures.add(configurationName to error)
+            }
+
+        assertEquals(emptySet(), coords)
+        assertEquals(listOf("testConfig" to "boom"), failures.map { it.first to it.second.message })
+    }
+
     @Test fun `includes BOM-platform components even though they have no jar artifact`() {
         writeFixture("com.example", "foo", "1.0")
         writeBomFixture("com.example", "bom", "1.0")

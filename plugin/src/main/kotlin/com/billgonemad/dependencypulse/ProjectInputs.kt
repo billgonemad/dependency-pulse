@@ -8,6 +8,12 @@ import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 internal fun resolveCoordinates(
     project: Project,
     ignoreConfigurations: List<String>,
+    onResolutionFailure: (configurationName: String, error: Exception) -> Unit = { name, error ->
+        project.logger.warn(
+            "dependencyPulse: could not resolve configuration '$name'; its dependencies are omitted from this report",
+            error,
+        )
+    },
 ): Set<Coords> =
     project.configurations
         .filter { it.isCanBeResolved && it.name !in ignoreConfigurations }
@@ -19,8 +25,9 @@ internal fun resolveCoordinates(
                     }
                 }
             } catch (
-                @Suppress("TooGenericExceptionCaught") ignored: Exception,
+                @Suppress("TooGenericExceptionCaught") e: Exception,
             ) {
+                onResolutionFailure(configuration.name, e)
                 emptyList()
             }
         }.toSet()
