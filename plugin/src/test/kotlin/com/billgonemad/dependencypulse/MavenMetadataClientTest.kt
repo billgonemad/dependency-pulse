@@ -61,6 +61,7 @@ class MavenMetadataClientTest {
 
     @Test fun `returns null when artifact not found on Central`() {
         server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setResponseCode(404))
 
         val result = client.fetchSignals("com.example", "nonexistent", "1.0.0")
 
@@ -146,22 +147,79 @@ class MavenMetadataClientTest {
         assertEquals(3, server.requestCount)
     }
 
-    @Test fun `throws when the selected version's POM is missing`() {
+    @Test fun `falls back to currentVersion's own POM when the selected version's POM 404s`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
         server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(pomResponse("Mon, 01 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-01T00:00:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `falls back to currentVersion's own POM when the selected version's POM lacks Last-Modified`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody("<project></project>"))
+        server.enqueue(pomResponse("Tue, 02 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-02T00:00:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `returns null when both the selected version and currentVersion POMs are unavailable`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNull(result)
+    }
+
+    @Test fun `does not re-fetch when the selected version already equals currentVersion and its POM 404s`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+
+        assertNull(result)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `falls back to currentVersion's own POM when maven-metadata xml is entirely missing`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(pomResponse("Wed, 03 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-03T00:00:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `still throws IOException on a genuine 5xx during the POM fetch`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        repeat(4) { server.enqueue(MockResponse().setResponseCode(503)) }
 
         assertFailsWith<IOException> {
             client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
         }
     }
 
-    @Test fun `throws when Last-Modified header is missing`() {
+    @Test fun `sends a HEAD request for the POM fetch, not GET`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
-        server.enqueue(MockResponse().setBody("<project></project>"))
+        server.enqueue(pomResponse())
 
-        assertFailsWith<IOException> {
-            client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
-        }
+        client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        server.takeRequest() // the maven-metadata.xml GET
+        val pomRequest = server.takeRequest()
+        assertEquals("HEAD", pomRequest.method)
     }
 
     @Test fun `caches metadata and last-modified responses per URL`() {
