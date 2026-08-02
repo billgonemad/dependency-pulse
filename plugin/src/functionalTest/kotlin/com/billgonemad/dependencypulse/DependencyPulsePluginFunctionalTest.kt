@@ -464,6 +464,44 @@ class DependencyPulsePluginFunctionalTest {
         assertEquals(null, result.task(":dependencyPulse")?.outcome)
     }
 
+    // Absence from the task graph is a proxy for "the coordinate/repo-URL providers were never
+    // realized," not a direct observation of it: tasks.register laziness means the task's
+    // configuration block (and therefore the provider wiring) only runs if the task enters the
+    // graph, so a null outcome here implies the providers were never realized either.
+    @Test fun `runOnCheck=false does not wire dependencyPulse under --configuration-cache either`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            dependencyPulse {
+                runOnCheck = false
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "check",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(null, result.task(":dependencyPulse")?.outcome)
+    }
+
     @Test fun `failOnRed causes build failure when latest release is stale`() {
         val threeYearsAgo = System.currentTimeMillis() - THREE_YEARS_MS
         server.dispatcher = mavenDispatcher("0.1", threeYearsAgo)
@@ -584,6 +622,54 @@ class DependencyPulsePluginFunctionalTest {
 
             assertTrue(result.output.contains("🔴"))
         }
+    }
+
+    @Test fun `dependencyPulse runs under --configuration-cache and reuses the cache on a second run`() {
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val firstRun =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, firstRun.task(":dependencyPulse")?.outcome)
+        assertTrue(firstRun.output.contains("Configuration cache entry stored"))
+
+        val secondRun =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--configuration-cache",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, secondRun.task(":dependencyPulse")?.outcome)
+        assertTrue(secondRun.output.contains("Configuration cache entry reused"))
     }
 }
 

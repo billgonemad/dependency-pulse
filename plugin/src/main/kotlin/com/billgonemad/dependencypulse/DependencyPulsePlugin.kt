@@ -55,11 +55,11 @@ class DependencyPulsePlugin : Plugin<Project> {
         ext: DependencyPulseExtension,
         rateLimitService: Provider<GitHubRateLimitService>,
     ) {
-        task.pomBaseUrl.set(
+        val pomBaseUrl =
             project.providers
                 .systemProperty("pomBaseUrl")
-                .orElse("https://repo1.maven.org/maven2"),
-        )
+                .orElse("https://repo1.maven.org/maven2")
+        task.pomBaseUrl.set(pomBaseUrl)
         task.githubApiBaseUrl.set(
             project.providers
                 .systemProperty("githubApiBaseUrl")
@@ -82,5 +82,11 @@ class DependencyPulsePlugin : Plugin<Project> {
         task.githubToken.set(ext.githubToken)
         task.githubRateLimitService.set(rateLimitService)
         task.usesService(rateLimitService)
+        task.dependencyCoordinates.set(
+            project.provider { resolveCoordinates(project, task.ignoreConfigurations.get()) },
+        )
+        task.repoUrls.set(
+            project.provider { buildRepoUrls(task.pomBaseUrl.get(), project.repositories) },
+        )
     }
 }

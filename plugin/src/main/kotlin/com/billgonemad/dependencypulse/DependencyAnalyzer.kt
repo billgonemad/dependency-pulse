@@ -1,78 +1,26 @@
 package com.billgonemad.dependencypulse
 
-import org.gradle.api.Project
-import org.gradle.api.artifacts.repositories.ArtifactRepository
-import org.gradle.api.artifacts.repositories.MavenArtifactRepository
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 private const val CONCURRENCY = 8
 
-internal data class Coords(
-    val group: String,
-    val artifact: String,
-    val version: String,
-)
-
-internal typealias Resolver = (project: Project, ignoreConfigurations: List<String>) -> Set<Coords>
-
-private fun defaultResolver(
-    project: Project,
-    ignore: List<String>,
-): Set<Coords> =
-    project.configurations
-        .filter { it.isCanBeResolved && it.name !in ignore }
-        .flatMap { it.resolvedConfiguration.lenientConfiguration.artifacts }
-        .map {
-            Coords(
-                it.moduleVersion.id.group,
-                it.moduleVersion.id.name,
-                it.moduleVersion.id.version,
-            )
-        }.toSet()
-
-internal fun buildRepoUrls(
-    pomBaseUrl: String,
-    repositories: List<ArtifactRepository>,
-): List<String> {
-    val declared =
-        repositories
-            .filterIsInstance<MavenArtifactRepository>()
-            .filter { it.url.scheme == "http" || it.url.scheme == "https" }
-            .map { it.url.toString() }
-    val all = (listOf(pomBaseUrl) + declared).map { it.trimEnd('/') }
-    val seen = mutableSetOf<String>()
-    return all.filter { seen.add(it) }
-}
-
-class DependencyAnalyzer(
+internal class DependencyAnalyzer(
     private val client: MavenMetadataClient,
     private val pomClient: PomClient,
     private val githubClient: GitHubClient,
 ) {
-    private var resolver: Resolver = ::defaultResolver
-
-    internal constructor(
-        client: MavenMetadataClient,
-        pomClient: PomClient,
-        githubClient: GitHubClient,
-        resolver: Resolver,
-    ) : this(client, pomClient, githubClient) {
-        this.resolver = resolver
-    }
-
     fun analyze(
-        project: Project,
-        ignoreConfigurations: List<String>,
+        coords: Set<Coords>,
+        repoUrls: List<String>,
         yellowAfterMonths: Int,
         redAfterMonths: Int,
         knownStableGroups: List<String>,
     ): List<DependencyInfo> {
-        val coords = resolver(project, ignoreConfigurations).sortedWith(compareBy({ it.group }, { it.artifact }))
-        val repoUrls = buildRepoUrls(client.baseUrl, project.repositories)
-        val executor = Executors.newFixedThreadPool(minOf(CONCURRENCY, maxOf(coords.size, 1)))
+        val sortedCoords = coords.sortedWith(compareBy({ it.group }, { it.artifact }))
+        val executor = Executors.newFixedThreadPool(minOf(CONCURRENCY, maxOf(sortedCoords.size, 1)))
         return try {
-            coords
+            sortedCoords
                 .map { coord ->
                     executor.submit(
                         Callable { analyzeOne(coord, repoUrls, yellowAfterMonths, redAfterMonths, knownStableGroups) },
