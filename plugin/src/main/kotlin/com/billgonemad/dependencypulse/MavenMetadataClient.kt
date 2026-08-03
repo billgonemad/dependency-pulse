@@ -49,8 +49,8 @@ open class MavenMetadataClient(
             fetchLastModified(group, artifact, selected, baseUrl)?.let { date ->
                 return MavenSignals(latestVersion = selected, latestReleaseDate = date)
             }
-            if (selected == currentVersion) return null
         }
+        if (selected == currentVersion) return null
         return fetchLastModified(group, artifact, currentVersion, baseUrl)?.let { date ->
             MavenSignals(latestVersion = currentVersion, latestReleaseDate = date)
         }
@@ -96,9 +96,9 @@ open class MavenMetadataClient(
 
             else -> {
                 response.headers().firstValue("Last-Modified").orElse(null)?.let { header ->
-                    val instant = Instant.from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header))
-                    lastModifiedCache[url] = instant
-                    instant
+                    Instant
+                        .from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header))
+                        .also { lastModifiedCache[url] = it }
                 }
             }
         }

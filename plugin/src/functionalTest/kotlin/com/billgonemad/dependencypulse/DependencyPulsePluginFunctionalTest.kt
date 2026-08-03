@@ -75,25 +75,6 @@ class DependencyPulsePluginFunctionalTest {
                         MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
                     }
 
-                    // When this repo has no maven-metadata.xml (serveMetadata = false), it must
-                    // also withhold the currentVersion POM fallback signal introduced in 5ae983b,
-                    // which probes the POM via a HEAD request from the plugin's own HttpClient.
-                    // Gradle's own resolver ALSO issues a HEAD to this same .pom URL first (as an
-                    // existence probe, before its follow-up GETs) — verified by logging every
-                    // request's method/User-Agent during a real run — so method alone can't tell
-                    // the two apart; 404-ing every HEAD here would make Gradle's own resolution
-                    // drop the coordinate entirely (0 dependencies scanned), not just withhold the
-                    // plugin's signal. Gradle's requests carry a "Gradle/…" User-Agent; the
-                    // plugin's HttpClient carries "Java-http-client/…" — that's the only reliable
-                    // way to 404 just the plugin's HEAD probe while still letting Gradle's own
-                    // HEAD-then-GET resolution succeed against this repo.
-                    path.endsWith(".pom") &&
-                        !serveMetadata &&
-                        request.method == "HEAD" &&
-                        request.getHeader("User-Agent")?.startsWith("Gradle") != true -> {
-                        MockResponse().setResponseCode(HTTP_404)
-                    }
-
                     path.endsWith(".pom") -> {
                         val httpDate =
                             DateTimeFormatter.RFC_1123_DATE_TIME.format(
@@ -112,12 +93,24 @@ class DependencyPulsePluginFunctionalTest {
                         val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
                         val groupId =
                             segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
-                        MockResponse()
-                            .setBody(
-                                "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
-                                    "<version>$version</version>$scmFragment</project>",
-                            ).setHeader("Last-Modified", httpDate)
-                            .setHeader("Connection", "close")
+                        val response =
+                            MockResponse()
+                                .setBody(
+                                    "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
+                                        "<version>$version</version>$scmFragment</project>",
+                                ).setHeader("Connection", "close")
+                        // When this repo has no maven-metadata.xml (serveMetadata = false), it
+                        // must also withhold the currentVersion POM fallback signal introduced in
+                        // 5ae983b. That fallback (MavenMetadataClient.fetchLastModified) already
+                        // treats a 200-OK POM response with no Last-Modified header as "no
+                        // signal" and returns null — the same path Task 1's own unit test "falls
+                        // back to currentVersion's own POM when the selected version's POM lacks
+                        // Last-Modified" covers. Omitting the header here (for every request, no
+                        // method/caller distinction needed) reuses that existing logic: Gradle's
+                        // own resolution only needs a 200 + valid POM body and never inspects
+                        // Last-Modified, so its HEAD-then-GET resolution is unaffected, while the
+                        // plugin's own signal probe correctly finds nothing.
+                        if (serveMetadata) response.setHeader("Last-Modified", httpDate) else response
                     }
 
                     // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
@@ -300,7 +293,8 @@ class DependencyPulsePluginFunctionalTest {
         }
     }
 
-    @Test fun `selected latest POM 404ing falls back to current-version POM instead of UNKNOWN`() {
+    @Test
+    fun `a dependency whose selected latest POM 404s falls back to its own current-version POM instead of UNKNOWN`() {
         server.dispatcher =
             object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
