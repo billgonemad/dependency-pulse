@@ -7,6 +7,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -15,6 +16,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
 
 class MavenMetadataClientTest {
     private lateinit var server: MockWebServer
@@ -66,6 +69,7 @@ class MavenMetadataClientTest {
         val result = client.fetchSignals("com.example", "nonexistent", "1.0.0")
 
         assertNull(result)
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun `throws when server is unreachable`() {
@@ -157,6 +161,11 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-01T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (404)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
     }
 
     @Test fun `falls back to currentVersion's own POM when the selected version's POM lacks Last-Modified`() {
@@ -169,6 +178,11 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-02T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (no header)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
     }
 
     @Test fun `returns null when both the selected version and currentVersion POMs are unavailable`() {
@@ -179,6 +193,7 @@ class MavenMetadataClientTest {
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNull(result)
+        assertEquals(3, server.requestCount)
     }
 
     @Test fun `does not re-fetch when the selected version already equals currentVersion and its POM 404s`() {
@@ -200,6 +215,10 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-03T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml (404)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
     }
 
     @Test fun `still throws IOException on a genuine 5xx during the POM fetch`() {
@@ -217,9 +236,11 @@ class MavenMetadataClientTest {
 
         client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
-        server.takeRequest() // the maven-metadata.xml GET
-        val pomRequest = server.takeRequest()
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // the maven-metadata.xml GET
+        val pomRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(pomRequest)
         assertEquals("HEAD", pomRequest.method)
+        assertTrue(pomRequest.path?.endsWith("/2.0.16/slf4j-api-2.0.16.pom") == true)
     }
 
     @Test fun `caches metadata and last-modified responses per URL`() {

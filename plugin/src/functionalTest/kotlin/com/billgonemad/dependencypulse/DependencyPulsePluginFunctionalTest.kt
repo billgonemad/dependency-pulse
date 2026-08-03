@@ -58,10 +58,15 @@ class DependencyPulsePluginFunctionalTest {
         // resolve a fixed (non-range, non-SNAPSHOT) version, so 404-ing it here doesn't affect
         // Gradle's resolution, only the plugin's own fetchSignals call against this repo.
         serveMetadata: Boolean = true,
+        // When set, 404s the POM for exactly this version (while every other coordinate's POM,
+        // and this same version's .jar, still serve normally) — simulates a metadata-selected
+        // "latest" version whose POM is itself unusable, without needing a bespoke dispatcher.
+        pomNotFoundForVersion: String? = null,
     ): Dispatcher =
         object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
+                val pomSegments = path.removePrefix("/").split("/")
                 return when {
                     path.endsWith("maven-metadata.xml") && serveMetadata -> {
                         MockResponse()
@@ -75,11 +80,13 @@ class DependencyPulsePluginFunctionalTest {
                         MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
                     }
 
+                    path.endsWith(".pom") &&
+                        pomNotFoundForVersion != null &&
+                        pomSegments[pomSegments.size - VERSION_SEGMENT_FROM_END] == pomNotFoundForVersion -> {
+                        MockResponse().setResponseCode(HTTP_404)
+                    }
+
                     path.endsWith(".pom") -> {
-                        val httpDate =
-                            DateTimeFormatter.RFC_1123_DATE_TIME.format(
-                                Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
-                            )
                         val scmFragment = scmUrl?.let { "<scm><url>$it</url></scm>" }.orEmpty()
                         // Gradle's real POM resolver requires groupId/artifactId/version to be
                         // present AND to match the requested coordinate exactly (verified: a
@@ -88,29 +95,32 @@ class DependencyPulsePluginFunctionalTest {
                         // (/{group-with-slashes}/{artifactId}/{version}/{artifactId}-{version}.pom)
                         // rather than hardcoded, so this dispatcher works for any coordinate a
                         // test declares without adding parameters.
-                        val segments = path.removePrefix("/").split("/")
-                        val version = segments[segments.size - VERSION_SEGMENT_FROM_END]
-                        val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
+                        val version = pomSegments[pomSegments.size - VERSION_SEGMENT_FROM_END]
+                        val artifactId = pomSegments[pomSegments.size - ARTIFACT_ID_SEGMENT_FROM_END]
                         val groupId =
-                            segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
-                        val response =
-                            MockResponse()
-                                .setBody(
-                                    "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
-                                        "<version>$version</version>$scmFragment</project>",
-                                ).setHeader("Connection", "close")
-                        // When this repo has no maven-metadata.xml (serveMetadata = false), it
-                        // must also withhold the currentVersion POM fallback signal introduced in
-                        // 5ae983b. That fallback (MavenMetadataClient.fetchLastModified) already
-                        // treats a 200-OK POM response with no Last-Modified header as "no
-                        // signal" and returns null — the same path Task 1's own unit test "falls
-                        // back to currentVersion's own POM when the selected version's POM lacks
-                        // Last-Modified" covers. Omitting the header here (for every request, no
-                        // method/caller distinction needed) reuses that existing logic: Gradle's
-                        // own resolution only needs a 200 + valid POM body and never inspects
-                        // Last-Modified, so its HEAD-then-GET resolution is unaffected, while the
-                        // plugin's own signal probe correctly finds nothing.
-                        if (serveMetadata) response.setHeader("Last-Modified", httpDate) else response
+                            pomSegments.subList(0, pomSegments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
+                        MockResponse()
+                            .setBody(
+                                "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
+                                    "<version>$version</version>$scmFragment</project>",
+                            ).setHeader("Connection", "close")
+                            .apply {
+                                // A repo with no maven-metadata.xml (serveMetadata = false) must also
+                                // withhold the currentVersion POM fallback signal
+                                // MavenMetadataClient.fetchLastModified probes for: that fallback
+                                // already treats a 200-OK POM response with no Last-Modified header as
+                                // "no signal" (returns null), so omitting the header here — regardless
+                                // of HTTP method or caller — reuses that existing logic instead of
+                                // needing to distinguish requests.
+                                if (serveMetadata) {
+                                    setHeader(
+                                        "Last-Modified",
+                                        DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                                            Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
+                                        ),
+                                    )
+                                }
+                            }
                     }
 
                     // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
@@ -296,50 +306,11 @@ class DependencyPulsePluginFunctionalTest {
     @Test
     fun `a dependency whose selected latest POM 404s falls back to its own current-version POM instead of UNKNOWN`() {
         server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse {
-                    val path = request.path.orEmpty()
-                    return when {
-                        path.endsWith("maven-metadata.xml") -> {
-                            MockResponse()
-                                .setBody(
-                                    "<metadata><versioning><latest>9.9.9</latest>" +
-                                        "<versions><version>9.9.9</version></versions></versioning></metadata>",
-                                ).setHeader("Connection", "close")
-                        }
-
-                        path.endsWith("/9.9.9/slf4j-api-9.9.9.pom") -> {
-                            MockResponse().setResponseCode(HTTP_404)
-                        }
-
-                        path.endsWith(".jar") -> {
-                            MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
-                        }
-
-                        path.endsWith(".pom") -> {
-                            val httpDate =
-                                DateTimeFormatter.RFC_1123_DATE_TIME.format(
-                                    Instant.now().atZone(ZoneOffset.UTC),
-                                )
-                            val segments = path.removePrefix("/").split("/")
-                            val version = segments[segments.size - VERSION_SEGMENT_FROM_END]
-                            val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
-                            val groupId =
-                                segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
-                            MockResponse()
-                                .setBody(
-                                    "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
-                                        "<version>$version</version></project>",
-                                ).setHeader("Last-Modified", httpDate)
-                                .setHeader("Connection", "close")
-                        }
-
-                        else -> {
-                            MockResponse().setResponseCode(HTTP_404)
-                        }
-                    }
-                }
-            }
+            mavenDispatcher(
+                latestVersion = "9.9.9",
+                lastModifiedEpochMs = System.currentTimeMillis(),
+                pomNotFoundForVersion = "9.9.9",
+            )
 
         settingsFile.writeText("rootProject.name = 'test-project'")
         buildFile.writeText(
