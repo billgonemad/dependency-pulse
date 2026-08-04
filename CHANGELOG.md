@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.1](https://github.com/billgonemad/dependency-pulse/compare/v0.8.0...v0.8.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* fall back to currentVersion's own POM when the latest POM is unusable or metadata.xml is missing ([#108](https://github.com/billgonemad/dependency-pulse/issues/108)) ([c232c1e](https://github.com/billgonemad/dependency-pulse/commit/c232c1e079af147f036a0b70ecb42ad71b187d49))
+* run dependencyPulse under the configuration cache ([#86](https://github.com/billgonemad/dependency-pulse/issues/86)) ([#105](https://github.com/billgonemad/dependency-pulse/issues/105)) ([4494df7](https://github.com/billgonemad/dependency-pulse/commit/4494df7195127b76857a9afc85387c8d87b25c8e))
+
 ## [0.8.0](https://github.com/billgonemad/dependency-pulse/compare/v0.7.0...v0.8.0) (2026-07-28)
 
 
