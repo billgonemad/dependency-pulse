@@ -17,6 +17,7 @@ import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -57,10 +58,15 @@ class DependencyPulsePluginFunctionalTest {
         // resolve a fixed (non-range, non-SNAPSHOT) version, so 404-ing it here doesn't affect
         // Gradle's resolution, only the plugin's own fetchSignals call against this repo.
         serveMetadata: Boolean = true,
+        // When set, 404s the POM for exactly this version (while every other coordinate's POM,
+        // and this same version's .jar, still serve normally) — simulates a metadata-selected
+        // "latest" version whose POM is itself unusable, without needing a bespoke dispatcher.
+        pomNotFoundForVersion: String? = null,
     ): Dispatcher =
         object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.path.orEmpty()
+                val pomSegments = path.removePrefix("/").split("/")
                 return when {
                     path.endsWith("maven-metadata.xml") && serveMetadata -> {
                         MockResponse()
@@ -74,11 +80,13 @@ class DependencyPulsePluginFunctionalTest {
                         MockResponse().setBody(Buffer().write(EMPTY_ZIP_BYTES)).setHeader("Connection", "close")
                     }
 
+                    path.endsWith(".pom") &&
+                        pomNotFoundForVersion != null &&
+                        pomSegments[pomSegments.size - VERSION_SEGMENT_FROM_END] == pomNotFoundForVersion -> {
+                        MockResponse().setResponseCode(HTTP_404)
+                    }
+
                     path.endsWith(".pom") -> {
-                        val httpDate =
-                            DateTimeFormatter.RFC_1123_DATE_TIME.format(
-                                Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
-                            )
                         val scmFragment = scmUrl?.let { "<scm><url>$it</url></scm>" }.orEmpty()
                         // Gradle's real POM resolver requires groupId/artifactId/version to be
                         // present AND to match the requested coordinate exactly (verified: a
@@ -87,17 +95,32 @@ class DependencyPulsePluginFunctionalTest {
                         // (/{group-with-slashes}/{artifactId}/{version}/{artifactId}-{version}.pom)
                         // rather than hardcoded, so this dispatcher works for any coordinate a
                         // test declares without adding parameters.
-                        val segments = path.removePrefix("/").split("/")
-                        val version = segments[segments.size - VERSION_SEGMENT_FROM_END]
-                        val artifactId = segments[segments.size - ARTIFACT_ID_SEGMENT_FROM_END]
+                        val version = pomSegments[pomSegments.size - VERSION_SEGMENT_FROM_END]
+                        val artifactId = pomSegments[pomSegments.size - ARTIFACT_ID_SEGMENT_FROM_END]
                         val groupId =
-                            segments.subList(0, segments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
+                            pomSegments.subList(0, pomSegments.size - ARTIFACT_ID_SEGMENT_FROM_END).joinToString(".")
                         MockResponse()
                             .setBody(
                                 "<project><groupId>$groupId</groupId><artifactId>$artifactId</artifactId>" +
                                     "<version>$version</version>$scmFragment</project>",
-                            ).setHeader("Last-Modified", httpDate)
-                            .setHeader("Connection", "close")
+                            ).setHeader("Connection", "close")
+                            .apply {
+                                // A repo with no maven-metadata.xml (serveMetadata = false) must also
+                                // withhold the currentVersion POM fallback signal
+                                // MavenMetadataClient.fetchLastModified probes for: that fallback
+                                // already treats a 200-OK POM response with no Last-Modified header as
+                                // "no signal" (returns null), so omitting the header here — regardless
+                                // of HTTP method or caller — reuses that existing logic instead of
+                                // needing to distinguish requests.
+                                if (serveMetadata) {
+                                    setHeader(
+                                        "Last-Modified",
+                                        DateTimeFormatter.RFC_1123_DATE_TIME.format(
+                                            Instant.ofEpochMilli(lastModifiedEpochMs).atZone(ZoneOffset.UTC),
+                                        ),
+                                    )
+                                }
+                            }
                     }
 
                     // Gradle probes for .module (Gradle Module Metadata) and .sha1/.md5 checksum
@@ -278,6 +301,58 @@ class DependencyPulsePluginFunctionalTest {
             assertTrue(result.output.contains("9.9.9"), "expected the second repo's version to win:\n${result.output}")
             assertTrue(result.output.contains("1 green"))
         }
+    }
+
+    @Test
+    fun `a dependency whose selected latest POM 404s falls back to its own current-version POM instead of UNKNOWN`() {
+        server.dispatcher =
+            mavenDispatcher(
+                latestVersion = "9.9.9",
+                lastModifiedEpochMs = System.currentTimeMillis(),
+                pomNotFoundForVersion = "9.9.9",
+            )
+
+        settingsFile.writeText("rootProject.name = 'test-project'")
+        buildFile.writeText(
+            """
+            plugins {
+                id 'java-library'
+                id 'com.billgonemad.dependency-pulse'
+            }
+            ${server.repositoriesBlock()}
+            dependencies {
+                compileOnly 'org.slf4j:slf4j-api:2.0.16'
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments(
+                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
+                    "dependencyPulse",
+                    "--show-green",
+                ).build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertFalse(
+            result.output.contains("❓"),
+            "expected a real status, not UNKNOWN:\n${result.output}",
+        )
+        assertFalse(
+            result.output.contains("Maven Central unavailable"),
+            "expected no UNKNOWN message:\n${result.output}",
+        )
+        assertTrue(
+            result.output.contains("Latest: 2.0.16"),
+            "expected the fallback to report currentVersion:\n${result.output}",
+        )
+        assertTrue(result.output.contains("1 green"))
     }
 
     @Test fun `default output hides GREEN dependencies that --show-green would reveal`() {

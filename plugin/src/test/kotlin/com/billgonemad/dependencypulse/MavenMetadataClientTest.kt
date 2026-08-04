@@ -7,6 +7,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Instant
+import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -15,6 +16,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
 
 class MavenMetadataClientTest {
     private lateinit var server: MockWebServer
@@ -45,8 +48,15 @@ class MavenMetadataClientTest {
         return "<metadata><versioning><latest>$latest</latest><versions>$versionTags</versions></versioning></metadata>"
     }
 
+    // No body: every .pom request in this file is a HEAD (fetchLastModified never uses GET), and
+    // no test here reads the body — a nonempty body on a HEAD response is a known MockWebServer/
+    // OkHttp footgun where the body bytes can still be written to the wire despite the method,
+    // desyncing a subsequent request reusing the same keep-alive connection (observed as a
+    // "Maven repository unreachable" IOException after ~30s on CI, not reproducible locally;
+    // a real HTTP server correctly omits the body for HEAD per RFC 7231, so this is a test-double
+    // artifact, not a production concern).
     private fun pomResponse(lastModified: String = "Tue, 25 Feb 2025 16:43:14 GMT"): MockResponse =
-        MockResponse().setBody("<project></project>").setHeader("Last-Modified", lastModified)
+        MockResponse().setHeader("Last-Modified", lastModified)
 
     @Test fun `returns MavenSignals when artifact found`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.15", "2.0.16")))
@@ -61,10 +71,12 @@ class MavenMetadataClientTest {
 
     @Test fun `returns null when artifact not found on Central`() {
         server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setResponseCode(404))
 
         val result = client.fetchSignals("com.example", "nonexistent", "1.0.0")
 
         assertNull(result)
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun `throws when server is unreachable`() {
@@ -146,22 +158,96 @@ class MavenMetadataClientTest {
         assertEquals(3, server.requestCount)
     }
 
-    @Test fun `throws when the selected version's POM is missing`() {
+    @Test fun `falls back to currentVersion's own POM when the selected version's POM 404s`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
         server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(pomResponse("Mon, 01 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-01T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (404)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
+    }
+
+    @Test fun `falls back to currentVersion's own POM when the selected version's POM lacks Last-Modified`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse())
+        server.enqueue(pomResponse("Tue, 02 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-02T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (no header)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
+    }
+
+    @Test fun `returns null when both the selected version and currentVersion POMs are unavailable`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNull(result)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun `does not re-fetch when the selected version already equals currentVersion and its POM 404s`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "2.0.16")
+
+        assertNull(result)
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun `falls back to currentVersion's own POM when maven-metadata xml is entirely missing`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+        server.enqueue(pomResponse("Wed, 03 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("1.0.0", result.latestVersion)
+        assertEquals(Instant.parse("2024-01-03T00:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml (404)
+        val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(fallbackRequest)
+        assertTrue(fallbackRequest.path?.endsWith("/1.0.0/slf4j-api-1.0.0.pom") == true)
+    }
+
+    @Test fun `still throws IOException on a genuine 5xx during the POM fetch`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        repeat(4) { server.enqueue(MockResponse().setResponseCode(503)) }
 
         assertFailsWith<IOException> {
             client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
         }
     }
 
-    @Test fun `throws when Last-Modified header is missing`() {
+    @Test fun `sends a HEAD request for the POM fetch, not GET`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
-        server.enqueue(MockResponse().setBody("<project></project>"))
+        server.enqueue(pomResponse())
 
-        assertFailsWith<IOException> {
-            client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
-        }
+        client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // the maven-metadata.xml GET
+        val pomRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(pomRequest)
+        assertEquals("HEAD", pomRequest.method)
+        assertTrue(pomRequest.path?.endsWith("/2.0.16/slf4j-api-2.0.16.pom") == true)
     }
 
     @Test fun `caches metadata and last-modified responses per URL`() {

@@ -4,11 +4,13 @@ import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.io.IOException
 import java.net.http.HttpClient
+import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
+import kotlin.jvm.optionals.getOrNull
 
 private const val MAX_RETRIES = 3
 private const val HTTP_NOT_FOUND = 404
@@ -41,13 +43,16 @@ open class MavenMetadataClient(
         currentVersion: String,
         baseUrl: String = this.baseUrl,
     ): MavenSignals? {
-        val metadata = fetchMetadata(group, artifact, baseUrl) ?: return null
-        return selectLatestVersion(metadata.latest, metadata.orderedVersions, currentVersion)?.let { selected ->
-            MavenSignals(
-                latestVersion = selected,
-                latestReleaseDate = fetchLastModified(group, artifact, selected, baseUrl),
-            )
-        }
+        fun signalsFor(version: String) =
+            fetchLastModified(group, artifact, version, baseUrl)?.let { date ->
+                MavenSignals(latestVersion = version, latestReleaseDate = date)
+            }
+        val metadata = fetchMetadata(group, artifact, baseUrl)
+        val selected = metadata?.let { selectLatestVersion(it.latest, it.orderedVersions, currentVersion) }
+        // If selected already equals currentVersion, its POM was just probed above and found
+        // unusable — re-probing the same URL would just repeat the identical failed request, so
+        // skip straight to null instead of falling through to the currentVersion fallback.
+        return selected?.let(::signalsFor) ?: if (selected == currentVersion) null else signalsFor(currentVersion)
     }
 
     private fun fetchMetadata(
@@ -57,7 +62,7 @@ open class MavenMetadataClient(
     ): ArtifactMetadata? {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/maven-metadata.xml"
         metadataCache[url]?.let { return it }
-        val response = getWithRetry(url)
+        val response = sendWithRetry(url)
         return when {
             response == null -> throw IOException("Maven repository unreachable for $url")
             response.statusCode() == HTTP_NOT_FOUND -> null
@@ -71,26 +76,41 @@ open class MavenMetadataClient(
         artifact: String,
         version: String,
         baseUrl: String,
-    ): Instant {
+    ): Instant? {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
         lastModifiedCache[url]?.let { return it }
-        val response = getWithRetry(url)
-        if (response == null || response.statusCode() != HTTP_OK) {
-            throw IOException("Maven repository returned HTTP ${response?.statusCode()} for $url")
+        val response = sendWithRetry(url) { method("HEAD", HttpRequest.BodyPublishers.noBody()) }
+        return when {
+            response == null -> {
+                throw IOException("Maven repository unreachable for $url")
+            }
+
+            response.statusCode() == HTTP_NOT_FOUND -> {
+                null
+            }
+
+            response.statusCode() != HTTP_OK -> {
+                throw IOException("Maven repository returned HTTP ${response.statusCode()} for $url")
+            }
+
+            else -> {
+                response.headers().firstValue("Last-Modified").getOrNull()?.let { header ->
+                    Instant
+                        .from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header))
+                        .also { lastModifiedCache[url] = it }
+                }
+            }
         }
-        val header =
-            response.headers().firstValue("Last-Modified").orElse(null)
-                ?: throw IOException("Missing Last-Modified header for $url")
-        val instant = Instant.from(DateTimeFormatter.RFC_1123_DATE_TIME.parse(header))
-        lastModifiedCache[url] = instant
-        return instant
     }
 
-    private fun getWithRetry(url: String): HttpResponse<String>? {
+    private fun sendWithRetry(
+        url: String,
+        configureRequest: HttpRequest.Builder.() -> Unit = {},
+    ): HttpResponse<String>? {
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
-            val outcome = safeGet(httpClient, url)
+            val outcome = safeGet(httpClient, url, configureRequest)
             result = outcome.orNull()
             val networkRetryable = outcome is SafeGetResult.Failure && outcome.retryable
             val statusRetryable = result?.statusCode() in RETRYABLE_CODES
