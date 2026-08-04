@@ -48,8 +48,15 @@ class MavenMetadataClientTest {
         return "<metadata><versioning><latest>$latest</latest><versions>$versionTags</versions></versioning></metadata>"
     }
 
+    // No body: every .pom request in this file is a HEAD (fetchLastModified never uses GET), and
+    // no test here reads the body — a nonempty body on a HEAD response is a known MockWebServer/
+    // OkHttp footgun where the body bytes can still be written to the wire despite the method,
+    // desyncing a subsequent request reusing the same keep-alive connection (observed as a
+    // "Maven repository unreachable" IOException after ~30s on CI, not reproducible locally;
+    // a real HTTP server correctly omits the body for HEAD per RFC 7231, so this is a test-double
+    // artifact, not a production concern).
     private fun pomResponse(lastModified: String = "Tue, 25 Feb 2025 16:43:14 GMT"): MockResponse =
-        MockResponse().setBody("<project></project>").setHeader("Last-Modified", lastModified)
+        MockResponse().setHeader("Last-Modified", lastModified)
 
     @Test fun `returns MavenSignals when artifact found`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.15", "2.0.16")))
@@ -170,7 +177,7 @@ class MavenMetadataClientTest {
 
     @Test fun `falls back to currentVersion's own POM when the selected version's POM lacks Last-Modified`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
-        server.enqueue(MockResponse().setBody("<project></project>"))
+        server.enqueue(MockResponse())
         server.enqueue(pomResponse("Tue, 02 Jan 2024 00:00:00 GMT"))
 
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
