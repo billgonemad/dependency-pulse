@@ -13,7 +13,7 @@
 # 1.23.x patch or Detekt 2.x — the latter natively supports the
 # failOnSeverity API the design spec originally referenced).
 detekt = "1.23.8"
-owasp-dependency-check = "12.2.2"
+owasp-dependency-check = "13.0.0"
 kotlin = "2.4.10"
 kotlinx-serialization = "1.11.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
