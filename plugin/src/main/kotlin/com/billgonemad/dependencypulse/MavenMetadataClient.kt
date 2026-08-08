@@ -19,6 +19,9 @@ private const val HTTP_INTERNAL_SERVER_ERROR = 500
 private const val HTTP_BAD_GATEWAY = 502
 private const val HTTP_SERVICE_UNAVAILABLE = 503
 private const val HTTP_GATEWAY_TIMEOUT = 504
+private const val HTTP_METHOD_NOT_ALLOWED = 405
+private const val HTTP_NOT_IMPLEMENTED = 501
+private val HEAD_UNSUPPORTED_CODES = setOf(HTTP_METHOD_NOT_ALLOWED, HTTP_NOT_IMPLEMENTED)
 private val RETRYABLE_CODES =
     setOf(
         HTTP_TOO_MANY_REQUESTS,
@@ -79,7 +82,13 @@ open class MavenMetadataClient(
     ): Instant? {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
         lastModifiedCache[url]?.let { return it }
-        val response = sendWithRetry(url) { method("HEAD", HttpRequest.BodyPublishers.noBody()) }
+        val headResponse = sendWithRetry(url) { method("HEAD", HttpRequest.BodyPublishers.noBody()) }
+        val response =
+            if (headResponse != null && headResponse.statusCode() in HEAD_UNSUPPORTED_CODES) {
+                sendWithRetry(url)
+            } else {
+                headResponse
+            }
         return when {
             response == null -> {
                 throw IOException("Maven repository unreachable for $url")
