@@ -237,6 +237,48 @@ class MavenMetadataClientTest {
         }
     }
 
+    @Test fun `retries with GET when the POM HEAD probe returns 405 Method Not Allowed`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(405))
+        server.enqueue(pomResponse("Thu, 04 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals(Instant.parse("2024-01-04T00:00:00Z"), result.latestReleaseDate)
+        assertEquals(3, server.requestCount)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // rejected HEAD
+        val retryRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(retryRequest)
+        assertEquals("GET", retryRequest.method)
+        assertTrue(retryRequest.path?.endsWith("/2.0.16/slf4j-api-2.0.16.pom") == true)
+    }
+
+    @Test fun `retries with GET when the POM HEAD probe returns 501 Not Implemented`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(501))
+        server.enqueue(pomResponse("Fri, 05 Jan 2024 00:00:00 GMT"))
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals(Instant.parse("2024-01-05T00:00:00Z"), result.latestReleaseDate)
+        assertEquals(3, server.requestCount)
+    }
+
+    @Test fun `still throws IOException when the POM HEAD probe returns a non-retryable 403`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setResponseCode(403))
+
+        val ex =
+            assertFailsWith<IOException> {
+                client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+            }
+        assertTrue(ex.message?.contains("403") == true)
+        assertEquals(2, server.requestCount)
+    }
+
     @Test fun `sends a HEAD request for the POM fetch, not GET`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
         server.enqueue(pomResponse())
