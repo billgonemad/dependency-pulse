@@ -56,13 +56,20 @@ open class MavenMetadataClient(
         val shouldVerifyCurrentVersion =
             selectedSignals != null && needsCurrentVersionCheck(metadata, selected, currentVersion)
         return when {
-            selectedSignals == null ->
+            selectedSignals == null -> {
                 // If selected already equals currentVersion, its POM was just probed above and found
                 // unusable — re-probing the same URL would just repeat the identical failed request, so
                 // skip straight to null instead of falling through to the currentVersion fallback.
                 if (selected == currentVersion) null else signalsFor(currentVersion)
-            shouldVerifyCurrentVersion -> freshestOf(signalsFor(currentVersion), selectedSignals)
-            else -> selectedSignals
+            }
+
+            shouldVerifyCurrentVersion -> {
+                freshestOf(signalsFor(currentVersion), selectedSignals)
+            }
+
+            else -> {
+                selectedSignals
+            }
         }
     }
 
