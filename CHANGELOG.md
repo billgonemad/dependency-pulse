@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.2](https://github.com/billgonemad/dependency-pulse/compare/v0.8.1...v0.8.2) (2026-08-08)
+
+
+### Bug Fixes
+
+* give PomClient the same declared-repo walk MavenMetadataClient got in [#100](https://github.com/billgonemad/dependency-pulse/issues/100) ([#116](https://github.com/billgonemad/dependency-pulse/issues/116)) ([85b1d1a](https://github.com/billgonemad/dependency-pulse/commit/85b1d1a2ef125ff177c721046f7fc933c4cd1a15)), closes [#115](https://github.com/billgonemad/dependency-pulse/issues/115)
+* retry with GET when a repo's POM HEAD probe returns 405/501 ([#110](https://github.com/billgonemad/dependency-pulse/issues/110)) ([11b7a0e](https://github.com/billgonemad/dependency-pulse/commit/11b7a0e001e9867fdffa8e9c12e79975fd4199fd)), closes [#107](https://github.com/billgonemad/dependency-pulse/issues/107)
+* verify currentVersion when a derived latest omits it from maven-metadata.xml ([#112](https://github.com/billgonemad/dependency-pulse/issues/112)) ([515b3d3](https://github.com/billgonemad/dependency-pulse/commit/515b3d330ef5b96c486127398b6e3c6311b1c7fd))
+* verify currentVersion when any metadata omits it, not just derived ([#113](https://github.com/billgonemad/dependency-pulse/issues/113)) ([6df03f9](https://github.com/billgonemad/dependency-pulse/commit/6df03f9674bbe6c7f658fd999f9a42a9071bdac7)), closes [#102](https://github.com/billgonemad/dependency-pulse/issues/102)
+
 ## [0.8.1](https://github.com/billgonemad/dependency-pulse/compare/v0.8.0...v0.8.1) (2026-08-04)
 
 
