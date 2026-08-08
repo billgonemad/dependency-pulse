@@ -52,10 +52,25 @@ open class MavenMetadataClient(
             }
         val metadata = fetchMetadata(group, artifact, baseUrl)
         val selected = metadata?.let { selectLatestVersion(it.latest, it.orderedVersions, currentVersion) }
-        // If selected already equals currentVersion, its POM was just probed above and found
-        // unusable — re-probing the same URL would just repeat the identical failed request, so
-        // skip straight to null instead of falling through to the currentVersion fallback.
-        return selected?.let(::signalsFor) ?: if (selected == currentVersion) null else signalsFor(currentVersion)
+        val selectedSignals = selected?.let(::signalsFor)
+        val shouldVerifyCurrentVersion =
+            selectedSignals != null && needsCurrentVersionCheck(metadata, selected, currentVersion)
+        return when {
+            selectedSignals == null -> {
+                // If selected already equals currentVersion, its POM was just probed above and found
+                // unusable — re-probing the same URL would just repeat the identical failed request, so
+                // skip straight to null instead of falling through to the currentVersion fallback.
+                if (selected == currentVersion) null else signalsFor(currentVersion)
+            }
+
+            shouldVerifyCurrentVersion -> {
+                freshestOf(signalsFor(currentVersion), selectedSignals)
+            }
+
+            else -> {
+                selectedSignals
+            }
+        }
     }
 
     private fun fetchMetadata(
@@ -138,8 +153,9 @@ open class MavenMetadataClient(
         val document = parseXml(xml) ?: throw IOException("Malformed maven-metadata.xml from $url")
         val versioning = requireChild(firstChildElement(document.documentElement, "versioning"), "versioning", url)
         val versions = firstChildElement(versioning, "versions")?.let { allChildText(it, "version") } ?: emptyList()
-        val latest = requireChild(firstChildText(versioning, "latest") ?: versions.lastOrNull(), "latest", url)
-        return ArtifactMetadata(latest, versions)
+        val declaredLatest = firstChildText(versioning, "latest")
+        val latest = requireChild(declaredLatest ?: versions.lastOrNull(), "latest", url)
+        return ArtifactMetadata(latest, versions, latestIsDerived = declaredLatest == null)
     }
 
     private fun <T> requireChild(
@@ -201,4 +217,28 @@ open class MavenMetadataClient(
 private data class ArtifactMetadata(
     val latest: String,
     val orderedVersions: List<String>,
+    val latestIsDerived: Boolean,
 )
+
+// metadata's <latest> was derived (tag absent) from a <versions> list that doesn't even contain
+// currentVersion — that list can't be trusted to be complete (#103), so the caller should verify
+// whether currentVersion itself is a newer, genuinely-published release before reporting a
+// "latest" that's actually older than what's already in use.
+private fun needsCurrentVersionCheck(
+    metadata: ArtifactMetadata,
+    selected: String?,
+    currentVersion: String,
+): Boolean =
+    metadata.latestIsDerived &&
+        selected != currentVersion &&
+        currentVersion !in metadata.orderedVersions
+
+private fun freshestOf(
+    candidate: MavenSignals?,
+    fallback: MavenSignals,
+): MavenSignals =
+    if (candidate != null && candidate.latestReleaseDate.isAfter(fallback.latestReleaseDate)) {
+        candidate
+    } else {
+        fallback
+    }

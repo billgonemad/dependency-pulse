@@ -365,12 +365,80 @@ class MavenMetadataClientTest {
             ),
         )
         server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+        server.enqueue(pomResponse("Wed, 03 Dec 2025 08:00:00 GMT"))
+
+        val result = client.fetchSignals("antlr", "antlr", "2.7.7")
+
+        assertNotNull(result)
+        assertEquals("2.7.7", result.latestVersion)
+        assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
+        server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // derived-latest "2.7.6" POM
+        val currentVersionRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        assertNotNull(currentVersionRequest)
+        assertTrue(currentVersionRequest.path?.endsWith("/2.7.7/antlr-2.7.7.pom") == true)
+    }
+
+    @Test fun `falls back to the derived latest when currentVersion's own POM is unavailable`() {
+        server.enqueue(
+            MockResponse().setBody(
+                "<metadata><versioning><versions><version>2.7.1</version>" +
+                    "<version>2.7.6</version></versions></versioning></metadata>",
+            ),
+        )
+        server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+        server.enqueue(MockResponse().setResponseCode(404))
 
         val result = client.fetchSignals("antlr", "antlr", "2.7.7")
 
         assertNotNull(result)
         assertEquals("2.7.6", result.latestVersion)
         assertEquals(Instant.parse("2009-10-13T23:35:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `keeps the derived latest when it is already fresher than currentVersion`() {
+        server.enqueue(
+            MockResponse().setBody(
+                "<metadata><versioning><versions><version>2.7.1</version>" +
+                    "<version>2.7.6</version></versions></versioning></metadata>",
+            ),
+        )
+        server.enqueue(pomResponse("Wed, 03 Dec 2025 08:00:00 GMT"))
+        server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+
+        val result = client.fetchSignals("antlr", "antlr", "2.7.7")
+
+        assertNotNull(result)
+        assertEquals("2.7.6", result.latestVersion)
+        assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `also verifies a pre-release currentVersion absent from a derived versions list`() {
+        server.enqueue(
+            MockResponse().setBody(
+                "<metadata><versioning><versions><version>2.7.1</version>" +
+                    "<version>2.7.6</version></versions></versioning></metadata>",
+            ),
+        )
+        server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+        server.enqueue(pomResponse("Wed, 03 Dec 2025 08:00:00 GMT"))
+
+        val result = client.fetchSignals("antlr", "antlr", "2.7.7-beta.1")
+
+        assertNotNull(result)
+        assertEquals("2.7.7-beta.1", result.latestVersion)
+        assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `does not second-guess an explicit latest tag even when currentVersion is missing from versions`() {
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(pomResponse())
+
+        val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
+
+        assertNotNull(result)
+        assertEquals("2.0.16", result.latestVersion)
+        assertEquals(2, server.requestCount)
     }
 
     @Test fun `throws when both latest and versions are absent`() {
