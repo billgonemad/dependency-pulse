@@ -2,6 +2,7 @@ package com.billgonemad.dependencypulse
 
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.QueueDispatcher
 import java.io.IOException
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -26,6 +27,11 @@ class MavenMetadataClientTest {
     @BeforeTest
     fun setUp() {
         server = MockWebServer()
+        // QueueDispatcher blocks on an empty queue by default, so a request the test didn't enqueue
+        // a response for hangs the client until the whole test JVM is killed, minutes later, with no
+        // indication of which test or which extra request caused it. failFast turns that into an
+        // immediate 404 and a normal assertion failure.
+        server.dispatcher = QueueDispatcher().apply { setFailFast(true) }
         server.start()
         client =
             MavenMetadataClient(
@@ -59,7 +65,7 @@ class MavenMetadataClientTest {
         MockResponse().setHeader("Last-Modified", lastModified)
 
     @Test fun `returns MavenSignals when artifact found`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.15", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.15", "2.0.16")))
         server.enqueue(pomResponse("Wed, 31 Jul 2024 00:00:00 GMT"))
 
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
@@ -95,7 +101,7 @@ class MavenMetadataClientTest {
     // is the only way to deterministically exercise that path; same
     // technique GitHubClientTest.kt already uses for the same reason.
     @Test fun `retries once on connection-level failure and succeeds on the subsequent request`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(pomResponse())
         val flakyClient =
             MavenMetadataClient(
@@ -136,7 +142,7 @@ class MavenMetadataClientTest {
 
     @Test fun `retries once on 429 and returns result on subsequent 200`() {
         server.enqueue(MockResponse().setResponseCode(429))
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(pomResponse())
 
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
@@ -147,7 +153,7 @@ class MavenMetadataClientTest {
     }
 
     @Test fun `retries on 503 during the Last-Modified lookup and returns result on subsequent 200`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(MockResponse().setResponseCode(503))
         server.enqueue(pomResponse())
 
@@ -238,7 +244,7 @@ class MavenMetadataClientTest {
     }
 
     @Test fun `retries with GET when the POM HEAD probe returns 405 Method Not Allowed`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(MockResponse().setResponseCode(405))
         server.enqueue(pomResponse("Thu, 04 Jan 2024 00:00:00 GMT"))
 
@@ -256,7 +262,7 @@ class MavenMetadataClientTest {
     }
 
     @Test fun `retries with GET when the POM HEAD probe returns 501 Not Implemented`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(MockResponse().setResponseCode(501))
         server.enqueue(pomResponse("Fri, 05 Jan 2024 00:00:00 GMT"))
 
@@ -280,7 +286,7 @@ class MavenMetadataClientTest {
     }
 
     @Test fun `sends a HEAD request for the POM fetch, not GET`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.16")))
         server.enqueue(pomResponse())
 
         client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
@@ -293,7 +299,7 @@ class MavenMetadataClientTest {
     }
 
     @Test fun `caches metadata and last-modified responses per URL`() {
-        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
+        server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "1.0.0", "2.0.0", "2.0.16")))
         server.enqueue(pomResponse())
 
         client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
@@ -305,7 +311,7 @@ class MavenMetadataClientTest {
     @Test fun `explicit baseUrl argument overrides the constructor default`() {
         val secondServer = MockWebServer()
         secondServer.start()
-        secondServer.enqueue(MockResponse().setBody(metadataBody("9.9.9", "9.9.9")))
+        secondServer.enqueue(MockResponse().setBody(metadataBody("9.9.9", "1.0.0", "9.9.9")))
         secondServer.enqueue(pomResponse("Fri, 01 Aug 2025 00:00:00 GMT"))
 
         val result =
@@ -326,9 +332,9 @@ class MavenMetadataClientTest {
     @Test fun `caches independently per baseUrl for the same group and artifact`() {
         val secondServer = MockWebServer()
         secondServer.start()
-        server.enqueue(MockResponse().setBody(metadataBody("1.0.0", "1.0.0")))
+        server.enqueue(MockResponse().setBody(metadataBody("1.0.0", "0.9.0", "1.0.0")))
         server.enqueue(pomResponse("Mon, 01 Jan 2024 00:00:00 GMT"))
-        secondServer.enqueue(MockResponse().setBody(metadataBody("2.0.0", "2.0.0")))
+        secondServer.enqueue(MockResponse().setBody(metadataBody("2.0.0", "0.9.0", "2.0.0")))
         secondServer.enqueue(pomResponse("Tue, 01 Jul 2025 00:00:00 GMT"))
 
         val first = client.fetchSignals("org.slf4j", "slf4j-api", "0.9.0")
@@ -430,15 +436,33 @@ class MavenMetadataClientTest {
         assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
     }
 
-    @Test fun `does not second-guess an explicit latest tag even when currentVersion is missing from versions`() {
+    @Test fun `verifies currentVersion when an explicit latest tag omits it from versions`() {
+        server.enqueue(
+            MockResponse().setBody(
+                metadataBody("7.3-20210825160000+0000", "7.3-20210825160000+0000"),
+            ),
+        )
+        server.enqueue(pomResponse("Wed, 25 Aug 2021 16:00:00 GMT"))
+        server.enqueue(pomResponse("Fri, 23 Jan 2026 16:32:28 GMT"))
+
+        val result = client.fetchSignals("org.gradle", "gradle-tooling-api", "8.14.4")
+
+        assertNotNull(result)
+        assertEquals("8.14.4", result.latestVersion)
+        assertEquals(Instant.parse("2026-01-23T16:32:28Z"), result.latestReleaseDate)
+    }
+
+    @Test fun `keeps an explicit latest tag when the verified currentVersion is older`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
-        server.enqueue(pomResponse())
+        server.enqueue(pomResponse("Tue, 25 Feb 2025 16:43:14 GMT"))
+        server.enqueue(pomResponse("Thu, 08 Jan 2009 12:00:00 GMT"))
 
         val result = client.fetchSignals("org.slf4j", "slf4j-api", "1.0.0")
 
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
-        assertEquals(2, server.requestCount)
+        assertEquals(Instant.parse("2025-02-25T16:43:14Z"), result.latestReleaseDate)
+        assertEquals(3, server.requestCount)
     }
 
     @Test fun `throws when both latest and versions are absent`() {

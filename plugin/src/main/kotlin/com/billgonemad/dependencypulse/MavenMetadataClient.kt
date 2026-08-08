@@ -155,7 +155,7 @@ open class MavenMetadataClient(
         val versions = firstChildElement(versioning, "versions")?.let { allChildText(it, "version") } ?: emptyList()
         val declaredLatest = firstChildText(versioning, "latest")
         val latest = requireChild(declaredLatest ?: versions.lastOrNull(), "latest", url)
-        return ArtifactMetadata(latest, versions, latestIsDerived = declaredLatest == null)
+        return ArtifactMetadata(latest, versions)
     }
 
     private fun <T> requireChild(
@@ -217,21 +217,20 @@ open class MavenMetadataClient(
 private data class ArtifactMetadata(
     val latest: String,
     val orderedVersions: List<String>,
-    val latestIsDerived: Boolean,
 )
 
-// metadata's <latest> was derived (tag absent) from a <versions> list that doesn't even contain
-// currentVersion — that list can't be trusted to be complete (#103), so the caller should verify
-// whether currentVersion itself is a newer, genuinely-published release before reporting a
-// "latest" that's actually older than what's already in use.
+// A <versions> list that doesn't contain the very version the build resolved can't be trusted to
+// be complete (#103), so the caller should verify whether currentVersion itself is a newer,
+// genuinely-published release before reporting a "latest" that's actually older than what's
+// already in use. An explicitly declared <latest> is no evidence of completeness: a virtual repo
+// can serve one upstream proxy's metadata for a coordinate whose artifacts it proxies from a
+// different upstream, publishing a complete-looking file that lists a single ancient version
+// alongside the 500+ releases it actually serves (#102).
 private fun needsCurrentVersionCheck(
     metadata: ArtifactMetadata,
     selected: String?,
     currentVersion: String,
-): Boolean =
-    metadata.latestIsDerived &&
-        selected != currentVersion &&
-        currentVersion !in metadata.orderedVersions
+): Boolean = selected != currentVersion && currentVersion !in metadata.orderedVersions
 
 private fun freshestOf(
     candidate: MavenSignals?,
