@@ -413,6 +413,23 @@ class MavenMetadataClientTest {
         assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
     }
 
+    @Test fun `also verifies a pre-release currentVersion absent from a derived versions list`() {
+        server.enqueue(
+            MockResponse().setBody(
+                "<metadata><versioning><versions><version>2.7.1</version>" +
+                    "<version>2.7.6</version></versions></versioning></metadata>",
+            ),
+        )
+        server.enqueue(pomResponse("Tue, 13 Oct 2009 23:35:00 GMT"))
+        server.enqueue(pomResponse("Wed, 03 Dec 2025 08:00:00 GMT"))
+
+        val result = client.fetchSignals("antlr", "antlr", "2.7.7-beta.1")
+
+        assertNotNull(result)
+        assertEquals("2.7.7-beta.1", result.latestVersion)
+        assertEquals(Instant.parse("2025-12-03T08:00:00Z"), result.latestReleaseDate)
+    }
+
     @Test fun `does not second-guess an explicit latest tag even when currentVersion is missing from versions`() {
         server.enqueue(MockResponse().setBody(metadataBody("2.0.16", "2.0.16")))
         server.enqueue(pomResponse())
