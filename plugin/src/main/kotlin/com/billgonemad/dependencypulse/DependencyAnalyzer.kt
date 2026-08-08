@@ -39,7 +39,7 @@ internal class DependencyAnalyzer(
         knownStableGroups: List<String>,
     ): DependencyInfo {
         val (group, artifact, version) = coord
-        val githubSignals = resolveGithubSignals(group, artifact, version)
+        val githubSignals = resolveGithubSignals(coord, repoUrls)
         val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
         val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
         return when (walkResult) {
@@ -162,16 +162,35 @@ internal class DependencyAnalyzer(
     }
 
     private fun resolveGithubSignals(
-        group: String,
-        artifact: String,
-        version: String,
+        coord: Coords,
+        repoUrls: List<String>,
     ): GitHubSignals =
         try {
-            val repo = pomClient.fetchGitHubRepo(group, artifact, version)
+            val repo = resolveGithubRepo(coord, repoUrls)
             repo?.let { githubClient.fetchSignals(it) } ?: GitHubSignals.NoRepo
         } catch (
             @Suppress("TooGenericExceptionCaught") ignored: Exception,
         ) {
             GitHubSignals.FetchFailed
         }
+
+    // 404/not-found keeps walking to the next declared repo; a resolved (200) POM stops the walk
+    // and is treated as the authoritative answer for this GAV, whether or not it carries an scm
+    // link — see the walk-termination discussion on #115.
+    private fun resolveGithubRepo(
+        coord: Coords,
+        repoUrls: List<String>,
+    ): String? {
+        val (group, artifact, version) = coord
+        for (repoUrl in repoUrls) {
+            when (val fetch = pomClient.lookupGitHubRepo(group, artifact, version, repoUrl)) {
+                is PomFetch.Success -> {
+                    return fetch.githubRepo
+                }
+
+                PomFetch.NotFound -> {}
+            }
+        }
+        return null
+    }
 }

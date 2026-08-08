@@ -251,6 +251,69 @@ class DependencyPulsePluginFunctionalTest {
         }
     }
 
+    @Test fun `a github repo link only present on a second declared repo's POM is used to resolve GitHub signals`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
+            }
+
+        val pushedAt = Instant.now().toString()
+        val secondDispatcher =
+            mavenDispatcher(
+                "2.0.16",
+                System.currentTimeMillis(),
+                scmUrl = "https://github.com/example-owner/example-repo",
+            )
+        MockWebServer().apply { dispatcher = secondDispatcher }.use { secondServer ->
+            secondServer.start()
+
+            MockWebServer().apply { dispatcher = githubDispatcher(pushedAt) }.use { githubServer ->
+                githubServer.start()
+
+                settingsFile.writeText("rootProject.name = 'test-project'")
+                buildFile.writeText(
+                    """
+                    plugins {
+                        id 'java-library'
+                        id 'com.billgonemad.dependency-pulse'
+                    }
+                    repositories {
+                        maven {
+                            url = uri("http://${server.hostName}:${server.port}")
+                            allowInsecureProtocol = true
+                        }
+                        maven {
+                            url = uri("http://${secondServer.hostName}:${secondServer.port}")
+                            allowInsecureProtocol = true
+                        }
+                    }
+                    dependencies {
+                        compileOnly 'org.slf4j:slf4j-api:2.0.16'
+                    }
+                    """.trimIndent(),
+                )
+
+                val result =
+                    GradleRunner
+                        .create()
+                        .withProjectDir(projectDir)
+                        .withPluginClasspath()
+                        .withCompatGradleVersion()
+                        .withArguments(
+                            "-DpomBaseUrl=http://${server.hostName}:${server.port}",
+                            "-DgithubApiBaseUrl=http://${githubServer.hostName}:${githubServer.port}",
+                            "dependencyPulse",
+                            "--show-green",
+                        ).build()
+
+                assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+                val githubRequest = githubServer.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                assertNotNull(githubRequest, "expected a request to the GitHub mock server, but none arrived")
+                assertTrue(githubRequest.path?.startsWith("/repos/example-owner/example-repo") == true)
+            }
+        }
+    }
+
     @Test fun `a dependency only resolvable via a second declared repo is reported using that repo's data`() {
         server.dispatcher =
             object : Dispatcher() {
