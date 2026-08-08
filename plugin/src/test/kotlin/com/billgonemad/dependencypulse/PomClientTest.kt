@@ -68,7 +68,7 @@ class PomClientTest {
     @Test fun `requests the pom at the maven coordinate path`() {
         server.enqueue(MockResponse().setResponseCode(404))
 
-        client.fetchGitHubRepo("org.slf4j", "slf4j-api", "2.0.16")
+        client.lookupGitHubRepo("org.slf4j", "slf4j-api", "2.0.16")
 
         val recorded = server.takeRequest()
         assertEquals("/org/slf4j/slf4j-api/2.0.16/slf4j-api-2.0.16.pom", recorded.path)
@@ -89,7 +89,7 @@ class PomClientTest {
             ),
         )
 
-        assertEquals("owner/from-url", client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success("owner/from-url"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
     @Test fun `falls back to scm connection when url is absent`() {
@@ -105,7 +105,7 @@ class PomClientTest {
             ),
         )
 
-        assertEquals("owner/repo", client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success("owner/repo"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
     @Test fun `falls back to scm developerConnection when url and connection are absent`() {
@@ -121,7 +121,7 @@ class PomClientTest {
             ),
         )
 
-        assertEquals("owner/repo", client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success("owner/repo"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
     @Test fun `falls back to project url when scm is absent`() {
@@ -135,10 +135,10 @@ class PomClientTest {
             ),
         )
 
-        assertEquals("owner/repo", client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success("owner/repo"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns null when scm and url are both non-github`() {
+    @Test fun `resolves the pom but finds no github link when scm and url are both non-github`() {
         server.enqueue(
             MockResponse().setBody(
                 """
@@ -152,34 +152,63 @@ class PomClientTest {
             ),
         )
 
-        assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success(null), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns null when pom is not found`() {
+    @Test fun `returns NotFound when the pom is not found`() {
         server.enqueue(MockResponse().setResponseCode(404))
 
-        assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns null when the server is unreachable`() {
+    @Test fun `returns NotFound when the server is unreachable`() {
         server.shutdown()
 
-        assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns null when a coordinate produces an invalid uri`() {
-        assertNull(client.fetchGitHubRepo("g", "artifact with spaces", "1.0"))
+    @Test fun `returns NotFound when a coordinate produces an invalid uri`() {
+        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "artifact with spaces", "1.0"))
     }
 
-    @Test fun `returns null for malformed xml`() {
+    @Test fun `resolves the pom but finds no github link for malformed xml`() {
         server.enqueue(MockResponse().setBody("not valid xml <<<"))
 
-        assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success(null), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns null when project has neither scm nor url`() {
+    @Test fun `resolves the pom but finds no github link when project has neither scm nor url`() {
         server.enqueue(MockResponse().setBody("<project></project>"))
 
-        assertNull(client.fetchGitHubRepo("g", "a", "1.0"))
+        assertEquals(PomFetch.Success(null), client.lookupGitHubRepo("g", "a", "1.0"))
+    }
+
+    @Test fun `explicit baseUrl argument overrides the constructor default`() {
+        val secondServer = MockWebServer()
+        secondServer.start()
+        secondServer.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <scm>
+                    <url>https://github.com/owner/from-second</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result =
+            client.lookupGitHubRepo(
+                "g",
+                "a",
+                "1.0",
+                baseUrl = "http://${secondServer.hostName}:${secondServer.port}",
+            )
+
+        assertEquals(PomFetch.Success("owner/from-second"), result)
+        assertEquals(0, server.requestCount)
+        assertEquals(1, secondServer.requestCount)
+        secondServer.shutdown()
     }
 }

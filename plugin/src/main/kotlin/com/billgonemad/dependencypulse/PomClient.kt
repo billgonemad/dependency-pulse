@@ -16,16 +16,30 @@ internal fun normalizeGitHubUrl(rawUrl: String?): String? {
     return "$owner/$repo"
 }
 
+// POM-not-found (any repo that doesn't have this coordinate at all) is kept distinct from
+// POM-found-but-no-scm-link: the former means the walk across declared repos should keep
+// going, the latter means the walk has its authoritative answer for this GAV and should stop,
+// even though that answer is "no GitHub link". See #115.
+internal sealed class PomFetch {
+    data class Success(
+        val githubRepo: String?,
+    ) : PomFetch()
+
+    object NotFound : PomFetch()
+}
+
 open class PomClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
     private val httpClient: HttpClient = HttpClientProvider.httpClient,
 ) {
-    open fun fetchGitHubRepo(
+    internal open fun lookupGitHubRepo(
         group: String,
         artifact: String,
         version: String,
-    ): String? {
-        val root = fetchPomBody(group, artifact, version)?.let { parsePom(it) }?.documentElement
+        baseUrl: String = this.baseUrl,
+    ): PomFetch {
+        val body = fetchPomBody(group, artifact, version, baseUrl) ?: return PomFetch.NotFound
+        val root = parsePom(body)?.documentElement
         val scm = root?.let { firstChildElement(it, "scm") }
         val candidates =
             listOfNotNull(
@@ -34,13 +48,14 @@ open class PomClient(
                 scm?.let { firstChildText(it, "developerConnection") },
                 root?.let { firstChildText(it, "url") },
             )
-        return candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
+        return PomFetch.Success(candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) })
     }
 
     private fun fetchPomBody(
         group: String,
         artifact: String,
         version: String,
+        baseUrl: String,
     ): String? {
         val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
         val response = safeGet(httpClient, "$baseUrl/$path").orNull() ?: return null

@@ -40,20 +40,22 @@ class DependencyAnalyzerTest {
 
     private fun stubPomClient(repo: String? = null): PomClient =
         object : PomClient() {
-            override fun fetchGitHubRepo(
+            override fun lookupGitHubRepo(
                 group: String,
                 artifact: String,
                 version: String,
-            ) = repo
+                baseUrl: String,
+            ) = PomFetch.Success(repo)
         }
 
     private fun throwingPomClient(): PomClient =
         object : PomClient() {
-            override fun fetchGitHubRepo(
+            override fun lookupGitHubRepo(
                 group: String,
                 artifact: String,
                 version: String,
-            ): String? = error("simulated PomClient bug")
+                baseUrl: String,
+            ): PomFetch = error("simulated PomClient bug")
         }
 
     private fun stubGithubClient(signals: GitHubSignals = GitHubSignals.FetchFailed): GitHubClient =
@@ -395,6 +397,89 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertEquals("first repo failure", results[0].errorMessage)
+    }
+
+    @Test fun `keeps walking the github repo lookup past a repo whose POM is not found`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val calledBaseUrls = mutableListOf<String>()
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    calledBaseUrls.add(baseUrl)
+                    return if (baseUrl.endsWith("second")) PomFetch.Success("org/hosted") else PomFetch.NotFound
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient(githubSignals))
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "hosted", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(githubSignals, results[0].githubSignals)
+        assertEquals(2, calledBaseUrls.size)
+    }
+
+    @Test fun `stops the github repo lookup at the first repo whose POM resolves, even without an scm link`() {
+        val calledBaseUrls = mutableListOf<String>()
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    calledBaseUrls.add(baseUrl)
+                    return PomFetch.Success(null)
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "bare", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
+        assertEquals(1, calledBaseUrls.size)
+    }
+
+    @Test fun `resolves githubSignals to NoRepo when every declared repo 404s for the POM`() {
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch = PomFetch.NotFound
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "missing", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
     }
 
     @Test fun `stays UNKNOWN when the Maven lookup is unresolvable and GitHub has no worse signal`() {
