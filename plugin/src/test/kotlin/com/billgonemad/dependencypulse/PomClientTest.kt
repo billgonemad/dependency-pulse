@@ -290,4 +290,24 @@ class PomClientTest {
         assertEquals(1, secondServer.requestCount)
         secondServer.shutdown()
     }
+
+    @Test fun `caches a successful pom fetch and does not re-request it`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val first = client.lookupGitHubRepo("g", "a", "1.0")
+        val second = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(first, second)
+        assertEquals(1, server.requestCount)
+    }
 }

@@ -3,6 +3,7 @@ package com.billgonemad.dependencypulse
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.net.http.HttpClient
+import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
 
 private val GITHUB_URL_PATTERN = Regex("""(?<![\w-])github\.com[/:]+([\w.-]+)/([\w.-]+)""")
@@ -33,13 +34,18 @@ open class PomClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
     private val httpClient: HttpClient = HttpClientProvider.httpClient,
 ) {
+    private val pomCache = ConcurrentHashMap<String, PomFetch.Success>()
+
     internal open fun lookupGitHubRepo(
         group: String,
         artifact: String,
         version: String,
         baseUrl: String = this.baseUrl,
     ): PomFetch {
-        val body = fetchPomBody(group, artifact, version, baseUrl) ?: return PomFetch.NotFound
+        val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
+        val url = "$baseUrl/$path"
+        pomCache[url]?.let { return it }
+        val body = fetchPomBody(url) ?: return PomFetch.NotFound
         val root = parsePom(body)?.documentElement
         val scm = root?.let { firstChildElement(it, "scm") }
         val candidates =
@@ -51,7 +57,7 @@ open class PomClient(
             )
         val githubRepo = candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
         val parentCoords = root?.let { firstChildElement(it, "parent") }?.let(::parseParentCoords)
-        return PomFetch.Success(githubRepo, parentCoords)
+        return PomFetch.Success(githubRepo, parentCoords).also { pomCache[url] = it }
     }
 
     private fun parseParentCoords(parent: Element): Coords? {
@@ -61,14 +67,8 @@ open class PomClient(
         return Coords(group, artifact, version)
     }
 
-    private fun fetchPomBody(
-        group: String,
-        artifact: String,
-        version: String,
-        baseUrl: String,
-    ): String? {
-        val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        val response = safeGet(httpClient, "$baseUrl/$path").orNull() ?: return null
+    private fun fetchPomBody(url: String): String? {
+        val response = safeGet(httpClient, url).orNull() ?: return null
         return if (response.statusCode() == HTTP_OK) response.body() else null
     }
 
