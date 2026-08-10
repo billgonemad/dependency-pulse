@@ -138,6 +138,85 @@ class PomClientTest {
         assertEquals(PomFetch.Success("owner/repo"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
+    @Test fun `extracts parent coordinates when a parent element is present`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <artifactId>example-parent</artifactId>
+                    <version>3.0</version>
+                  </parent>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(
+            PomFetch.Success(githubRepo = null, parentCoords = Coords("org.example", "example-parent", "3.0")),
+            result,
+        )
+    }
+
+    @Test fun `leaves parentCoords null when there is no parent element`() {
+        server.enqueue(MockResponse().setBody("<project></project>"))
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(PomFetch.Success(githubRepo = null, parentCoords = null), result)
+    }
+
+    @Test fun `leaves parentCoords null when the parent element is missing a required child`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <version>3.0</version>
+                  </parent>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(PomFetch.Success(githubRepo = null, parentCoords = null), result)
+    }
+
+    @Test fun `extracts both scm and parent coordinates when both are present`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <artifactId>example-parent</artifactId>
+                    <version>3.0</version>
+                  </parent>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(
+            PomFetch.Success(
+                githubRepo = "owner/repo",
+                parentCoords = Coords("org.example", "example-parent", "3.0"),
+            ),
+            result,
+        )
+    }
+
     @Test fun `resolves the pom but finds no github link when scm and url are both non-github`() {
         server.enqueue(
             MockResponse().setBody(

@@ -23,6 +23,7 @@ internal fun normalizeGitHubUrl(rawUrl: String?): String? {
 internal sealed class PomFetch {
     data class Success(
         val githubRepo: String?,
+        val parentCoords: Coords? = null,
     ) : PomFetch()
 
     object NotFound : PomFetch()
@@ -48,7 +49,16 @@ open class PomClient(
                 scm?.let { firstChildText(it, "developerConnection") },
                 root?.let { firstChildText(it, "url") },
             )
-        return PomFetch.Success(candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) })
+        val githubRepo = candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
+        val parentCoords = root?.let { firstChildElement(it, "parent") }?.let(::parseParentCoords)
+        return PomFetch.Success(githubRepo, parentCoords)
+    }
+
+    private fun parseParentCoords(parent: Element): Coords? {
+        val group = firstChildText(parent, "groupId") ?: return null
+        val artifact = firstChildText(parent, "artifactId") ?: return null
+        val version = firstChildText(parent, "version") ?: return null
+        return Coords(group, artifact, version)
     }
 
     private fun fetchPomBody(
