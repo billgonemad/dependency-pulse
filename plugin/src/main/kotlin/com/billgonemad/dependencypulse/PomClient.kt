@@ -42,30 +42,25 @@ open class PomClient(
         version: String,
         baseUrl: String = this.baseUrl,
     ): PomFetch {
-        val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        val url = "$baseUrl/$path"
-        val cached = pomCache[url]
-        return if (cached != null) {
-            cached
-        } else {
-            val body = fetchPomBody(url)
-            if (body == null) {
-                PomFetch.NotFound
-            } else {
-                val root = parsePom(body)?.documentElement
-                val scm = root?.let { firstChildElement(it, "scm") }
-                val candidates =
-                    listOfNotNull(
-                        scm?.let { firstChildText(it, "url") },
-                        scm?.let { firstChildText(it, "connection") },
-                        scm?.let { firstChildText(it, "developerConnection") },
-                        root?.let { firstChildText(it, "url") },
-                    )
-                val githubRepo = candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
-                val parentCoords = root?.let { firstChildElement(it, "parent") }?.let(::parseParentCoords)
-                PomFetch.Success(githubRepo, parentCoords).also { pomCache[url] = it }
-            }
-        }
+        val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
+        return pomCache[url]
+            ?: fetchPomBody(url)?.let { body -> parseFetch(body).also { pomCache[url] = it } }
+            ?: PomFetch.NotFound
+    }
+
+    private fun parseFetch(body: String): PomFetch.Success {
+        val root = parsePom(body)?.documentElement
+        val scm = root?.let { firstChildElement(it, "scm") }
+        val candidates =
+            listOfNotNull(
+                scm?.let { firstChildText(it, "url") },
+                scm?.let { firstChildText(it, "connection") },
+                scm?.let { firstChildText(it, "developerConnection") },
+                root?.let { firstChildText(it, "url") },
+            )
+        val githubRepo = candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
+        val parentCoords = root?.let { firstChildElement(it, "parent") }?.let(::parseParentCoords)
+        return PomFetch.Success(githubRepo, parentCoords)
     }
 
     private fun parseParentCoords(parent: Element): Coords? {

@@ -184,7 +184,7 @@ internal class DependencyAnalyzer(
         var done = false
         repeat(MAX_PARENT_DEPTH) {
             if (!done) {
-                when (val fetch = walkRepos(candidate, repoUrls)) {
+                when (val fetch = fetchPomAcrossRepos(candidate, repoUrls)) {
                     is PomFetch.Success -> {
                         when {
                             fetch.githubRepo != null -> {
@@ -216,7 +216,7 @@ internal class DependencyAnalyzer(
     // link — see the walk-termination discussion on #115. A Success with neither an scm link nor
     // a parent, and a NotFound at every declared repo, both mean "nothing left to climb to" and
     // are handled identically by the caller.
-    private fun walkRepos(
+    private fun fetchPomAcrossRepos(
         coord: Coords,
         repoUrls: List<String>,
     ): PomFetch {
