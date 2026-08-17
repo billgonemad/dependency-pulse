@@ -599,4 +599,86 @@ class DependencyAnalyzerTest {
 
         assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
     }
+
+    @Test fun `continues to the next declared repo when the github repo lookup throws`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val calledBaseUrls = mutableListOf<String>()
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    calledBaseUrls.add(baseUrl)
+                    return if (baseUrl.endsWith("second")) {
+                        PomFetch.Success("org/hosted")
+                    } else {
+                        error("simulated transient failure")
+                    }
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient(githubSignals))
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "hosted", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(githubSignals, results[0].githubSignals)
+        assertEquals(2, calledBaseUrls.size)
+    }
+
+    @Test fun `sets githubSignals to FetchFailed when every declared repo's github lookup throws`() {
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch = error("simulated transient failure")
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "flaky", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
+    }
+
+    @Test fun `sets githubSignals to FetchFailed when climbing to a parent throws on every declared repo`() {
+        val childCoord = Coords("org.example", "child", "1.0")
+        val parentCoord = Coords("org.example", "child-parent", "2.0")
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch =
+                    if (Coords(group, artifact, version) == childCoord) {
+                        PomFetch.Success(githubRepo = null, parentCoords = parentCoord)
+                    } else {
+                        error("simulated transient failure resolving the parent")
+                    }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
+    }
 }

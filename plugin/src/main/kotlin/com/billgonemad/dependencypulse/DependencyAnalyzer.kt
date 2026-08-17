@@ -221,10 +221,18 @@ internal class DependencyAnalyzer(
         repoUrls: List<String>,
     ): PomFetch {
         val (group, artifact, version) = coord
+        var firstError: Exception? = null
         for (repoUrl in repoUrls) {
-            val fetch = pomClient.lookupGitHubRepo(group, artifact, version, repoUrl)
-            if (fetch is PomFetch.Success) return fetch
+            try {
+                val fetch = pomClient.lookupGitHubRepo(group, artifact, version, repoUrl)
+                if (fetch is PomFetch.Success) return fetch
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                if (firstError == null) firstError = e
+            }
         }
+        firstError?.let { throw it }
         return PomFetch.NotFound
     }
 }

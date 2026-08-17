@@ -2,12 +2,17 @@ package com.billgonemad.dependencypulse
 
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.io.IOException
 import java.net.http.HttpClient
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PomClientTest {
     private lateinit var server: MockWebServer
@@ -240,14 +245,20 @@ class PomClientTest {
         assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns NotFound when the server is unreachable`() {
+    @Test fun `throws when the server is unreachable`() {
         server.shutdown()
 
-        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "a", "1.0") }
     }
 
-    @Test fun `returns NotFound when a coordinate produces an invalid uri`() {
-        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "artifact with spaces", "1.0"))
+    @Test fun `throws when a coordinate produces an invalid uri`() {
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "artifact with spaces", "1.0") }
+    }
+
+    @Test fun `throws when the server returns an unexpected status code`() {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "a", "1.0") }
     }
 
     @Test fun `resolves the pom but finds no github link for malformed xml`() {
@@ -308,6 +319,33 @@ class PomClientTest {
         val second = client.lookupGitHubRepo("g", "a", "1.0")
 
         assertEquals(first, second)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `fetches a coordinate exactly once even under concurrent lookups`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+        val threadCount = 8
+        val executor = Executors.newFixedThreadPool(threadCount)
+        val results =
+            try {
+                (1..threadCount)
+                    .map { executor.submit(Callable { client.lookupGitHubRepo("g", "a", "1.0") }) }
+                    .map { it.get() }
+            } finally {
+                executor.shutdown()
+            }
+
+        assertTrue(results.all { it == PomFetch.Success("owner/repo") })
         assertEquals(1, server.requestCount)
     }
 }

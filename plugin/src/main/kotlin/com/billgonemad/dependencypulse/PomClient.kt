@@ -2,6 +2,7 @@ package com.billgonemad.dependencypulse
 
 import org.w3c.dom.Document
 import org.w3c.dom.Element
+import java.io.IOException
 import java.net.http.HttpClient
 import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
@@ -9,6 +10,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 private val GITHUB_URL_PATTERN = Regex("""(?<![\w-])github\.com[/:]+([\w.-]+)/([\w.-]+)""")
 
 private const val DISALLOW_DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl"
+private const val HTTP_NOT_FOUND = 404
 
 internal fun normalizeGitHubUrl(rawUrl: String?): String? {
     val match = rawUrl?.let { GITHUB_URL_PATTERN.find(it) } ?: return null
@@ -34,7 +36,7 @@ open class PomClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
     private val httpClient: HttpClient = HttpClientProvider.httpClient,
 ) {
-    private val pomCache = ConcurrentHashMap<String, PomFetch.Success>()
+    private val pomCache = ConcurrentHashMap<String, PomFetch>()
 
     internal open fun lookupGitHubRepo(
         group: String,
@@ -43,9 +45,7 @@ open class PomClient(
         baseUrl: String = this.baseUrl,
     ): PomFetch {
         val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        return pomCache[url]
-            ?: fetchPomBody(url)?.let { body -> parseFetch(body).also { pomCache[url] = it } }
-            ?: PomFetch.NotFound
+        return pomCache.computeIfAbsent(url) { fetchPomBody(url)?.let(::parseFetch) ?: PomFetch.NotFound }
     }
 
     private fun parseFetch(body: String): PomFetch.Success {
@@ -75,8 +75,12 @@ open class PomClient(
     }
 
     private fun fetchPomBody(url: String): String? {
-        val response = safeGet(httpClient, url).orNull() ?: return null
-        return if (response.statusCode() == HTTP_OK) response.body() else null
+        val response = safeGet(httpClient, url).orNull() ?: throw IOException("Maven repository unreachable for $url")
+        return when (response.statusCode()) {
+            HTTP_NOT_FOUND -> null
+            HTTP_OK -> response.body()
+            else -> throw IOException("Maven repository returned HTTP ${response.statusCode()} for $url")
+        }
     }
 
     private fun parsePom(xml: String): Document? =
