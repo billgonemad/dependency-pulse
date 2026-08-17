@@ -109,7 +109,10 @@ object ReportPrinter {
         when (val signals = dep.githubSignals) {
             is GitHubSignals.Found -> {
                 when {
-                    signals.isArchived -> println("   GitHub: Repo archived")
+                    signals.isArchived -> {
+                        println("   GitHub: Repo archived")
+                    }
+
                     signals.lastCommitDate != null -> {
                         val months = monthsAgo(signals.lastCommitDate, now)
                         println("   GitHub: Last commit $months months ago")
@@ -117,9 +120,15 @@ object ReportPrinter {
                 }
             }
 
-            GitHubSignals.RateLimited -> println("   GitHub: check skipped (rate limited)")
-            GitHubSignals.FetchFailed -> println("   GitHub: check skipped (fetch failed)")
-            GitHubSignals.NoRepo -> Unit
+            GitHubSignals.RateLimited -> {
+                println("   GitHub: check skipped (rate limited)")
+            }
+
+            GitHubSignals.FetchFailed -> {
+                println("   GitHub: check skipped (fetch failed)")
+            }
+
+            GitHubSignals.NoRepo -> {}
         }
     }
 
