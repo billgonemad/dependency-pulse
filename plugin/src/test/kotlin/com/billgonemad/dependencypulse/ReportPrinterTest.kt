@@ -247,16 +247,64 @@ class ReportPrinterTest {
         assertFalse(output.contains("GitHub:"))
     }
 
-    @Test fun `RateLimited GitHub signal shows no GitHub line`() {
+    @Test fun `RateLimited GitHub signal shows a skipped message`() {
         val depList = listOf(dep(githubSignals = GitHubSignals.RateLimited))
         val output = capture { ReportPrinter.print(depList) }
-        assertFalse(output.contains("GitHub:"))
+        assertTrue(output.contains("GitHub: check skipped (rate limited)"))
     }
 
-    @Test fun `FetchFailed GitHub signal shows no GitHub line`() {
+    @Test fun `FetchFailed GitHub signal shows a skipped message`() {
         val depList = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
         val output = capture { ReportPrinter.print(depList) }
-        assertFalse(output.contains("GitHub:"))
+        assertTrue(output.contains("GitHub: check skipped (fetch failed)"))
+    }
+
+    @Test fun `summary line reports GitHub checks skipped due to rate limiting`() {
+        val deps =
+            listOf(
+                dep(githubSignals = GitHubSignals.RateLimited),
+                dep(githubSignals = GitHubSignals.RateLimited),
+                dep(signals = MavenSignals("1.0", Instant.now()), status = DepStatus.GREEN),
+            )
+        val output = capture { ReportPrinter.print(deps) }
+        assertTrue(output.contains("2 GitHub checks skipped (2 rate limited)."))
+    }
+
+    @Test fun `summary line reports GitHub checks skipped due to fetch failures`() {
+        val deps = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
+        val output = capture { ReportPrinter.print(deps) }
+        assertTrue(output.contains("1 GitHub checks skipped (1 fetch failed)."))
+    }
+
+    @Test fun `summary line combines rate-limited and fetch-failed skip counts`() {
+        val deps =
+            listOf(
+                dep(githubSignals = GitHubSignals.RateLimited),
+                dep(githubSignals = GitHubSignals.FetchFailed),
+            )
+        val output = capture { ReportPrinter.print(deps) }
+        assertTrue(output.contains("2 GitHub checks skipped (1 rate limited, 1 fetch failed)."))
+    }
+
+    @Test fun `summary line omits skipped clause when no GitHub checks were skipped`() {
+        val deps = listOf(dep(githubSignals = GitHubSignals.NoRepo))
+        val output = capture { ReportPrinter.print(deps) }
+        assertFalse(output.contains("GitHub checks skipped"))
+    }
+
+    @Test fun `DEFAULT mode hides the skipped row for a plain-GREEN dep but keeps the summary count`() {
+        val now = Instant.now()
+        val deps =
+            listOf(
+                dep(
+                    signals = MavenSignals("1.0", now),
+                    status = DepStatus.GREEN,
+                    githubSignals = GitHubSignals.RateLimited,
+                ),
+            )
+        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.DEFAULT) }
+        assertFalse(output.contains("GitHub: check skipped"))
+        assertTrue(output.contains("1 GitHub checks skipped (1 rate limited)."))
     }
 
     @Test fun `Found with null lastCommitDate and not archived shows no GitHub line`() {

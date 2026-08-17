@@ -43,6 +43,20 @@ object ReportPrinter {
             "${results.size} dependencies scanned. $red red, $yellow yellow, $green green, " +
                 "$unknown unknown, $stable stable.",
         )
+        printGithubSkippedLine(results)
+    }
+
+    private fun printGithubSkippedLine(results: List<DependencyInfo>) {
+        val rateLimited = results.count { it.githubSignals == GitHubSignals.RateLimited }
+        val fetchFailed = results.count { it.githubSignals == GitHubSignals.FetchFailed }
+        val skipped = rateLimited + fetchFailed
+        if (skipped == 0) return
+        val reasons =
+            listOfNotNull(
+                "$rateLimited rate limited".takeIf { rateLimited > 0 },
+                "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
+            ).joinToString(", ")
+        println("$skipped GitHub checks skipped ($reasons).")
     }
 
     private fun selectEmoji(
@@ -92,17 +106,20 @@ object ReportPrinter {
         dep: DependencyInfo,
         now: Instant,
     ) {
-        val signals = dep.githubSignals
-        if (signals !is GitHubSignals.Found) return
-        when {
-            signals.isArchived -> {
-                println("   GitHub: Repo archived")
+        when (val signals = dep.githubSignals) {
+            is GitHubSignals.Found -> {
+                when {
+                    signals.isArchived -> println("   GitHub: Repo archived")
+                    signals.lastCommitDate != null -> {
+                        val months = monthsAgo(signals.lastCommitDate, now)
+                        println("   GitHub: Last commit $months months ago")
+                    }
+                }
             }
 
-            signals.lastCommitDate != null -> {
-                val months = monthsAgo(signals.lastCommitDate, now)
-                println("   GitHub: Last commit $months months ago")
-            }
+            GitHubSignals.RateLimited -> println("   GitHub: check skipped (rate limited)")
+            GitHubSignals.FetchFailed -> println("   GitHub: check skipped (fetch failed)")
+            GitHubSignals.NoRepo -> Unit
         }
     }
 

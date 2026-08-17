@@ -45,8 +45,12 @@ Dependency Pulse Report
    Spec (stable) | Latest: 3.0.0 | Released: 29 months ago
 ❓ com.flaky:unreachable-lib:2.0.0
    Maven Central unavailable — skipped (set failOnError=true to fail the build)
+✅ com.example:widget:2.3.0
+   Latest: 2.3.0 | Released: 2 months ago | Active
+   GitHub: check skipped (rate limited)
 =======================
-5 dependencies scanned. 1 red, 1 yellow, 1 green, 1 unknown, 1 stable.
+6 dependencies scanned. 1 red, 1 yellow, 2 green, 1 unknown, 1 stable.
+1 GitHub checks skipped (1 rate limited).
 ```
 
 ## Requirements
@@ -243,9 +247,15 @@ Central result and the GitHub result is worse wins:
 - A **stale last commit** (older than the same `yellowAfterMonths` /
   `redAfterMonths` thresholds used for Maven releases) can downgrade an
   otherwise-Green dependency to Yellow or Red.
-- If the repo can't be resolved, GitHub rate-limits the request, or the
-  lookup fails, the dependency's status is unaffected — it's scored on Maven
-  Central data alone, exactly as if GitHub signals weren't checked at all.
+- If the dependency's POM has no resolvable GitHub repo, nothing is printed
+  for GitHub — the dependency is scored on Maven Central data alone.
+- If a repo *was* resolved but the lookup was rate-limited or failed, the
+  dependency's status is still unaffected — it's scored on Maven Central
+  data alone — but the report says so: the dependency's line prints
+  `GitHub: check skipped (rate limited)` or `(fetch failed)` (when the line
+  is shown — see [Output verbosity](#output-verbosity)), and the summary
+  footer tallies the total across the run, e.g.
+  `2 GitHub checks skipped (1 rate limited, 1 fetch failed).`
 
 ### Known-stable dependencies
 
