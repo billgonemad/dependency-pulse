@@ -2,12 +2,17 @@ package com.billgonemad.dependencypulse
 
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import java.io.IOException
 import java.net.http.HttpClient
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PomClientTest {
     private lateinit var server: MockWebServer
@@ -138,6 +143,85 @@ class PomClientTest {
         assertEquals(PomFetch.Success("owner/repo"), client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
+    @Test fun `extracts parent coordinates when a parent element is present`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <artifactId>example-parent</artifactId>
+                    <version>3.0</version>
+                  </parent>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(
+            PomFetch.Success(githubRepo = null, parentCoords = Coords("org.example", "example-parent", "3.0")),
+            result,
+        )
+    }
+
+    @Test fun `leaves parentCoords null when there is no parent element`() {
+        server.enqueue(MockResponse().setBody("<project></project>"))
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(PomFetch.Success(githubRepo = null, parentCoords = null), result)
+    }
+
+    @Test fun `leaves parentCoords null when the parent element is missing a required child`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <version>3.0</version>
+                  </parent>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(PomFetch.Success(githubRepo = null, parentCoords = null), result)
+    }
+
+    @Test fun `extracts both scm and parent coordinates when both are present`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <parent>
+                    <groupId>org.example</groupId>
+                    <artifactId>example-parent</artifactId>
+                    <version>3.0</version>
+                  </parent>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val result = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(
+            PomFetch.Success(
+                githubRepo = "owner/repo",
+                parentCoords = Coords("org.example", "example-parent", "3.0"),
+            ),
+            result,
+        )
+    }
+
     @Test fun `resolves the pom but finds no github link when scm and url are both non-github`() {
         server.enqueue(
             MockResponse().setBody(
@@ -161,14 +245,20 @@ class PomClientTest {
         assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
     }
 
-    @Test fun `returns NotFound when the server is unreachable`() {
+    @Test fun `throws when the server is unreachable`() {
         server.shutdown()
 
-        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "a", "1.0"))
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "a", "1.0") }
     }
 
-    @Test fun `returns NotFound when a coordinate produces an invalid uri`() {
-        assertEquals(PomFetch.NotFound, client.lookupGitHubRepo("g", "artifact with spaces", "1.0"))
+    @Test fun `throws when a coordinate produces an invalid uri`() {
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "artifact with spaces", "1.0") }
+    }
+
+    @Test fun `throws when the server returns an unexpected status code`() {
+        server.enqueue(MockResponse().setResponseCode(500))
+
+        assertFailsWith<IOException> { client.lookupGitHubRepo("g", "a", "1.0") }
     }
 
     @Test fun `resolves the pom but finds no github link for malformed xml`() {
@@ -210,5 +300,52 @@ class PomClientTest {
         assertEquals(0, server.requestCount)
         assertEquals(1, secondServer.requestCount)
         secondServer.shutdown()
+    }
+
+    @Test fun `caches a successful pom fetch and does not re-request it`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+
+        val first = client.lookupGitHubRepo("g", "a", "1.0")
+        val second = client.lookupGitHubRepo("g", "a", "1.0")
+
+        assertEquals(first, second)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `fetches a coordinate exactly once even under concurrent lookups`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                <project>
+                  <scm>
+                    <url>https://github.com/owner/repo</url>
+                  </scm>
+                </project>
+                """.trimIndent(),
+            ),
+        )
+        val threadCount = 8
+        val executor = Executors.newFixedThreadPool(threadCount)
+        val results =
+            try {
+                (1..threadCount)
+                    .map { executor.submit(Callable { client.lookupGitHubRepo("g", "a", "1.0") }) }
+                    .map { it.get() }
+            } finally {
+                executor.shutdown()
+            }
+
+        assertTrue(results.all { it == PomFetch.Success("owner/repo") })
+        assertEquals(1, server.requestCount)
     }
 }
