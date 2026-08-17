@@ -2,12 +2,15 @@ package com.billgonemad.dependencypulse
 
 import org.w3c.dom.Document
 import org.w3c.dom.Element
+import java.io.IOException
 import java.net.http.HttpClient
+import java.util.concurrent.ConcurrentHashMap
 import javax.xml.parsers.DocumentBuilderFactory
 
 private val GITHUB_URL_PATTERN = Regex("""(?<![\w-])github\.com[/:]+([\w.-]+)/([\w.-]+)""")
 
 private const val DISALLOW_DOCTYPE_FEATURE = "http://apache.org/xml/features/disallow-doctype-decl"
+private const val HTTP_NOT_FOUND = 404
 
 internal fun normalizeGitHubUrl(rawUrl: String?): String? {
     val match = rawUrl?.let { GITHUB_URL_PATTERN.find(it) } ?: return null
@@ -23,6 +26,7 @@ internal fun normalizeGitHubUrl(rawUrl: String?): String? {
 internal sealed class PomFetch {
     data class Success(
         val githubRepo: String?,
+        val parentCoords: Coords? = null,
     ) : PomFetch()
 
     object NotFound : PomFetch()
@@ -32,13 +36,19 @@ open class PomClient(
     private val baseUrl: String = "https://repo1.maven.org/maven2",
     private val httpClient: HttpClient = HttpClientProvider.httpClient,
 ) {
+    private val pomCache = ConcurrentHashMap<String, PomFetch>()
+
     internal open fun lookupGitHubRepo(
         group: String,
         artifact: String,
         version: String,
         baseUrl: String = this.baseUrl,
     ): PomFetch {
-        val body = fetchPomBody(group, artifact, version, baseUrl) ?: return PomFetch.NotFound
+        val url = "$baseUrl/${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
+        return pomCache.computeIfAbsent(url) { fetchPomBody(url)?.let(::parseFetch) ?: PomFetch.NotFound }
+    }
+
+    private fun parseFetch(body: String): PomFetch.Success {
         val root = parsePom(body)?.documentElement
         val scm = root?.let { firstChildElement(it, "scm") }
         val candidates =
@@ -48,18 +58,29 @@ open class PomClient(
                 scm?.let { firstChildText(it, "developerConnection") },
                 root?.let { firstChildText(it, "url") },
             )
-        return PomFetch.Success(candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) })
+        val githubRepo = candidates.firstNotNullOfOrNull { normalizeGitHubUrl(it) }
+        val parentCoords = root?.let { firstChildElement(it, "parent") }?.let(::parseParentCoords)
+        return PomFetch.Success(githubRepo, parentCoords)
     }
 
-    private fun fetchPomBody(
-        group: String,
-        artifact: String,
-        version: String,
-        baseUrl: String,
-    ): String? {
-        val path = "${group.replace('.', '/')}/$artifact/$version/$artifact-$version.pom"
-        val response = safeGet(httpClient, "$baseUrl/$path").orNull() ?: return null
-        return if (response.statusCode() == HTTP_OK) response.body() else null
+    private fun parseParentCoords(parent: Element): Coords? {
+        val group = firstChildText(parent, "groupId")
+        val artifact = firstChildText(parent, "artifactId")
+        val version = firstChildText(parent, "version")
+        return if (group != null && artifact != null && version != null) {
+            Coords(group, artifact, version)
+        } else {
+            null
+        }
+    }
+
+    private fun fetchPomBody(url: String): String? {
+        val response = safeGet(httpClient, url).orNull() ?: throw IOException("Maven repository unreachable for $url")
+        return when (response.statusCode()) {
+            HTTP_NOT_FOUND -> null
+            HTTP_OK -> response.body()
+            else -> throw IOException("Maven repository returned HTTP ${response.statusCode()} for $url")
+        }
     }
 
     private fun parsePom(xml: String): Document? =

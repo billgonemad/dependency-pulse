@@ -4,6 +4,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 
 private const val CONCURRENCY = 8
+private const val MAX_PARENT_DEPTH = 5
 
 internal class DependencyAnalyzer(
     private val client: MavenMetadataClient,
@@ -174,23 +175,64 @@ internal class DependencyAnalyzer(
             GitHubSignals.FetchFailed
         }
 
-    // 404/not-found keeps walking to the next declared repo; a resolved (200) POM stops the walk
-    // and is treated as the authoritative answer for this GAV, whether or not it carries an scm
-    // link — see the walk-termination discussion on #115.
     private fun resolveGithubRepo(
         coord: Coords,
         repoUrls: List<String>,
     ): String? {
-        val (group, artifact, version) = coord
-        for (repoUrl in repoUrls) {
-            when (val fetch = pomClient.lookupGitHubRepo(group, artifact, version, repoUrl)) {
-                is PomFetch.Success -> {
-                    return fetch.githubRepo
-                }
+        var candidate = coord
+        var result: String? = null
+        var done = false
+        repeat(MAX_PARENT_DEPTH) {
+            if (!done) {
+                when (val fetch = fetchPomAcrossRepos(candidate, repoUrls)) {
+                    is PomFetch.Success -> {
+                        when {
+                            fetch.githubRepo != null -> {
+                                result = fetch.githubRepo
+                                done = true
+                            }
 
-                PomFetch.NotFound -> {}
+                            fetch.parentCoords != null -> {
+                                candidate = fetch.parentCoords
+                            }
+
+                            else -> {
+                                done = true
+                            }
+                        }
+                    }
+
+                    PomFetch.NotFound -> {
+                        done = true
+                    }
+                }
             }
         }
-        return null
+        return result
+    }
+
+    // 404/not-found keeps walking to the next declared repo; a resolved (200) POM stops the walk
+    // and is treated as the authoritative answer for this GAV, whether or not it carries an scm
+    // link — see the walk-termination discussion on #115. A Success with neither an scm link nor
+    // a parent, and a NotFound at every declared repo, both mean "nothing left to climb to" and
+    // are handled identically by the caller.
+    private fun fetchPomAcrossRepos(
+        coord: Coords,
+        repoUrls: List<String>,
+    ): PomFetch {
+        val (group, artifact, version) = coord
+        var firstError: Exception? = null
+        for (repoUrl in repoUrls) {
+            try {
+                val fetch = pomClient.lookupGitHubRepo(group, artifact, version, repoUrl)
+                if (fetch is PomFetch.Success) return fetch
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception,
+            ) {
+                if (firstError == null) firstError = e
+            }
+        }
+        firstError?.let { throw it }
+        return PomFetch.NotFound
     }
 }

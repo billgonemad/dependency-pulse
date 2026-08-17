@@ -491,4 +491,194 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
     }
+
+    @Test fun `climbs to the parent POM when the child has no scm link`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val childCoord = Coords("org.example", "child", "1.0")
+        val parentCoord = Coords("org.example", "child-parent", "2.0")
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch =
+                    if (Coords(group, artifact, version) == childCoord) {
+                        PomFetch.Success(githubRepo = null, parentCoords = parentCoord)
+                    } else {
+                        PomFetch.Success(githubRepo = "org/hosted", parentCoords = null)
+                    }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient(githubSignals))
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(githubSignals, results[0].githubSignals)
+    }
+
+    @Test fun `climbs through two parent hops to find the scm link at the grandparent`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val childCoord = Coords("org.example", "child", "1.0")
+        val parentCoord = Coords("org.example", "mid-parent", "1.0")
+        val grandparentCoord = Coords("org.example", "top-parent", "1.0")
+        val callLog = mutableListOf<Coords>()
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    val coord = Coords(group, artifact, version)
+                    callLog.add(coord)
+                    return when (coord) {
+                        childCoord -> PomFetch.Success(githubRepo = null, parentCoords = parentCoord)
+                        parentCoord -> PomFetch.Success(githubRepo = null, parentCoords = grandparentCoord)
+                        else -> PomFetch.Success(githubRepo = "org/hosted", parentCoords = null)
+                    }
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient(githubSignals))
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(githubSignals, results[0].githubSignals)
+        assertEquals(listOf(childCoord, parentCoord, grandparentCoord), callLog)
+    }
+
+    @Test fun `stops climbing after the depth cap and resolves to NoRepo`() {
+        var callCount = 0
+        val childCoord = Coords("org.example", "child", "1.0")
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    callCount++
+                    // Every level has a parent but none carries an scm link, so the chain never
+                    // terminates naturally and the walk must rely on the depth cap to stop.
+                    return PomFetch.Success(
+                        githubRepo = null,
+                        parentCoords = Coords(group, "$artifact-parent", version),
+                    )
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
+        assertEquals(5, callCount)
+    }
+
+    @Test fun `treats a parent GAV not found on any declared repo the same as a chain with no further parent`() {
+        val childCoord = Coords("org.example", "child", "1.0")
+        val missingParent = Coords("org.example", "ghost-parent", "1.0")
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch =
+                    if (Coords(group, artifact, version) == childCoord) {
+                        PomFetch.Success(githubRepo = null, parentCoords = missingParent)
+                    } else {
+                        PomFetch.NotFound
+                    }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(GitHubSignals.NoRepo, results[0].githubSignals)
+    }
+
+    @Test fun `continues to the next declared repo when the github repo lookup throws`() {
+        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val calledBaseUrls = mutableListOf<String>()
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch {
+                    calledBaseUrls.add(baseUrl)
+                    return if (baseUrl.endsWith("second")) {
+                        PomFetch.Success("org/hosted")
+                    } else {
+                        error("simulated transient failure")
+                    }
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient(githubSignals))
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "hosted", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(githubSignals, results[0].githubSignals)
+        assertEquals(2, calledBaseUrls.size)
+    }
+
+    @Test fun `sets githubSignals to FetchFailed when every declared repo's github lookup throws`() {
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch = error("simulated transient failure")
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "flaky", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
+    }
+
+    @Test fun `sets githubSignals to FetchFailed when climbing to a parent throws on every declared repo`() {
+        val childCoord = Coords("org.example", "child", "1.0")
+        val parentCoord = Coords("org.example", "child-parent", "2.0")
+        val pomClient =
+            object : PomClient() {
+                override fun lookupGitHubRepo(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): PomFetch =
+                    if (Coords(group, artifact, version) == childCoord) {
+                        PomFetch.Success(githubRepo = null, parentCoords = parentCoord)
+                    } else {
+                        error("simulated transient failure resolving the parent")
+                    }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), pomClient, stubGithubClient())
+
+        val results = analyzer.analyze(setOf(childCoord), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(GitHubSignals.FetchFailed, results[0].githubSignals)
+    }
 }
