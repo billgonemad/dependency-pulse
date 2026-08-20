@@ -289,6 +289,15 @@ Entries can be a group-ID prefix (`'jakarta.'`, matched against
 (`'com.google.code.findbugs:jsr305'`) for a specific artifact within an
 otherwise actively-developed group. The defaults are `['jakarta.', 'javax.']`.
 
+## Development
+
+A git `pre-push` hook runs `./gradlew check` (tests, Detekt, and Spotless
+formatting) before every push, catching CI failures locally instead of after
+the fact. It's installed automatically — `settings.gradle.kts` copies it
+from `scripts/git-hooks/` into `.git/hooks/` on your first `./gradlew`
+invocation, no setup step required. Skip it in an emergency with
+`SKIP_CHECKS=1 git push`.
+
 ## License
 
 Apache 2.0 — see [LICENSE](LICENSE).

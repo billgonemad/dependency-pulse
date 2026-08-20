@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Pre-push gate: runs the same checks CI's "build" job runs (spotlessCheck +
+# detekt + test, via `./gradlew check`) before a push leaves the machine, so
+# formatting/lint/test failures are caught locally instead of surfacing in
+# CI a few minutes later.
+#
+# Does NOT run the compat.yml functionalTest matrix (multiple Gradle
+# versions) - that's slow and CI-only by design.
+#
+# Skip in an emergency with: SKIP_CHECKS=1 git push
+set -euo pipefail
+
+if [ -n "${SKIP_CHECKS:-}" ]; then
+    echo "pre-push: SKIP_CHECKS set, skipping ./gradlew check"
+    exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+echo "pre-push: running ./gradlew check (set SKIP_CHECKS=1 to bypass)"
+./gradlew check
