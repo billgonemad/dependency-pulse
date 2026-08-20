@@ -8,3 +8,25 @@
 
 rootProject.name = "dependency-pulse"
 include("plugin")
+
+// --- Git hooks auto-install ---
+// .git/hooks/ isn't version-controlled, so a tracked hook script alone
+// wouldn't run for anyone who clones the repo. Every ./gradlew invocation
+// evaluates settings.gradle.kts first, regardless of which task is
+// requested, so installing here - rather than via a dedicated Gradle task
+// someone has to remember to run - guarantees the hook is in place before
+// their first push. Only touches the file when it's missing or its content
+// has drifted from the tracked copy, so this is a no-op on every other run.
+run {
+    val sourceHooksDir = rootDir.resolve("scripts/git-hooks")
+    val gitHooksDir = rootDir.resolve(".git/hooks")
+    if (sourceHooksDir.isDirectory && gitHooksDir.isDirectory) {
+        sourceHooksDir.listFiles { file -> file.isFile }?.forEach { source ->
+            val target = gitHooksDir.resolve(source.name)
+            if (!target.exists() || target.readText() != source.readText()) {
+                source.copyTo(target, overwrite = true)
+                target.setExecutable(true)
+            }
+        }
+    }
+}
