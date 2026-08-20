@@ -17,8 +17,8 @@ owasp-dependency-check = "13.0.0"
 kotlin = "2.4.10"
 kotlinx-serialization = "1.11.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
-mockwebserver = "5.4.0"
-spotless = "8.9.0"     # latest stable verified at impl time
+mockwebserver = "5.5.0"
+spotless = "8.10.0"     # latest stable verified at impl time
 plugin-publish = "2.1.1"
 
 [libraries]
