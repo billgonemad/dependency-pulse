@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.3](https://github.com/billgonemad/dependency-pulse/compare/v0.8.2...v0.8.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* surface skipped GitHub checks in the report instead of silent GREEN ([#121](https://github.com/billgonemad/dependency-pulse/issues/121)) ([ac26276](https://github.com/billgonemad/dependency-pulse/commit/ac26276a151effa715277400aa3a93fa9602c852))
+
 ## [0.8.2](https://github.com/billgonemad/dependency-pulse/compare/v0.8.1...v0.8.2) (2026-08-17)
 
 
