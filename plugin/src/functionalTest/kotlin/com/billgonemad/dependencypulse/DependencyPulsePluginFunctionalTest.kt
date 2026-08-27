@@ -182,6 +182,10 @@ class DependencyPulsePluginFunctionalTest {
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
+            dependencyPulse {
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+            }
             """.trimIndent(),
         )
 
@@ -192,8 +196,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                     "--show-green",
                 ).build()
@@ -227,6 +229,10 @@ class DependencyPulsePluginFunctionalTest {
                 dependencies {
                     compileOnly 'org.slf4j:slf4j-api:2.0.16'
                 }
+                dependencyPulse {
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${githubServer.hostName}:${githubServer.port}"
+                }
                 """.trimIndent(),
             )
 
@@ -237,8 +243,6 @@ class DependencyPulsePluginFunctionalTest {
                     .withPluginClasspath()
                     .withCompatGradleVersion()
                     .withArguments(
-                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                        "-DgithubApiBaseUrl=http://${githubServer.hostName}:${githubServer.port}",
                         "dependencyPulse",
                         "--show-green",
                     ).build()
@@ -290,6 +294,10 @@ class DependencyPulsePluginFunctionalTest {
                     dependencies {
                         compileOnly 'org.slf4j:slf4j-api:2.0.16'
                     }
+                    dependencyPulse {
+                        pomBaseUrl = "http://${server.hostName}:${server.port}"
+                        githubApiBaseUrl = "http://${githubServer.hostName}:${githubServer.port}"
+                    }
                     """.trimIndent(),
                 )
 
@@ -300,8 +308,6 @@ class DependencyPulsePluginFunctionalTest {
                         .withPluginClasspath()
                         .withCompatGradleVersion()
                         .withArguments(
-                            "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                            "-DgithubApiBaseUrl=http://${githubServer.hostName}:${githubServer.port}",
                             "dependencyPulse",
                             "--show-green",
                         ).build()
@@ -344,6 +350,10 @@ class DependencyPulsePluginFunctionalTest {
                 dependencies {
                     compileOnly 'org.slf4j:slf4j-api:2.0.16'
                 }
+                dependencyPulse {
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+                }
                 """.trimIndent(),
             )
 
@@ -354,8 +364,6 @@ class DependencyPulsePluginFunctionalTest {
                     .withPluginClasspath()
                     .withCompatGradleVersion()
                     .withArguments(
-                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                         "dependencyPulse",
                         "--show-green",
                     ).build()
@@ -386,6 +394,10 @@ class DependencyPulsePluginFunctionalTest {
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
+            dependencyPulse {
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+            }
             """.trimIndent(),
         )
 
@@ -396,8 +408,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                     "--show-green",
                 ).build()
@@ -430,6 +440,10 @@ class DependencyPulsePluginFunctionalTest {
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
+            dependencyPulse {
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+            }
             """.trimIndent(),
         )
 
@@ -440,8 +454,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                 ).build()
 
@@ -462,6 +474,10 @@ class DependencyPulsePluginFunctionalTest {
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
+            dependencyPulse {
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+            }
             """.trimIndent(),
         )
 
@@ -472,8 +488,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                     "--summary-only",
                 ).build()
@@ -515,6 +529,8 @@ class DependencyPulsePluginFunctionalTest {
                 }
                 dependencyPulse {
                     failOnError = true
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
                 }
                 """.trimIndent(),
             )
@@ -526,8 +542,6 @@ class DependencyPulsePluginFunctionalTest {
                     .withPluginClasspath()
                     .withCompatGradleVersion()
                     .withArguments(
-                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                         "-DmavenCentralRetryDelayMs=0",
                         "dependencyPulse",
                     ).buildAndFail()
@@ -550,6 +564,8 @@ class DependencyPulsePluginFunctionalTest {
             }
             dependencyPulse {
                 runOnCheck = true
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
             }
             """.trimIndent(),
         )
@@ -561,8 +577,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "check",
                 ).build()
 
@@ -583,6 +597,8 @@ class DependencyPulsePluginFunctionalTest {
             }
             dependencyPulse {
                 runOnCheck = false
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
             }
             """.trimIndent(),
         )
@@ -594,8 +610,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "check",
                 ).build()
 
@@ -620,6 +634,8 @@ class DependencyPulsePluginFunctionalTest {
             }
             dependencyPulse {
                 runOnCheck = false
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
             }
             """.trimIndent(),
         )
@@ -631,8 +647,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "check",
                     "--configuration-cache",
                 ).build()
@@ -657,6 +671,8 @@ class DependencyPulsePluginFunctionalTest {
             }
             dependencyPulse {
                 failOnRed = true
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
             }
             """.trimIndent(),
         )
@@ -668,8 +684,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                 ).buildAndFail()
 
@@ -693,6 +707,8 @@ class DependencyPulsePluginFunctionalTest {
             }
             dependencyPulse {
                 failOnRed = true
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
             }
             """.trimIndent(),
         )
@@ -704,8 +720,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                 ).build()
 
@@ -742,6 +756,8 @@ class DependencyPulsePluginFunctionalTest {
                 }
                 dependencyPulse {
                     failOnRed = true
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
                 }
                 """.trimIndent(),
             )
@@ -753,8 +769,6 @@ class DependencyPulsePluginFunctionalTest {
                     .withPluginClasspath()
                     .withCompatGradleVersion()
                     .withArguments(
-                        "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                        "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                         "dependencyPulse",
                     ).buildAndFail()
 
@@ -774,6 +788,10 @@ class DependencyPulsePluginFunctionalTest {
             dependencies {
                 compileOnly 'org.slf4j:slf4j-api:2.0.16'
             }
+            dependencyPulse {
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+            }
             """.trimIndent(),
         )
 
@@ -784,8 +802,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                     "--configuration-cache",
                 ).build()
@@ -800,8 +816,6 @@ class DependencyPulsePluginFunctionalTest {
                 .withPluginClasspath()
                 .withCompatGradleVersion()
                 .withArguments(
-                    "-DpomBaseUrl=http://${server.hostName}:${server.port}",
-                    "-DgithubApiBaseUrl=http://${server.hostName}:${server.port}",
                     "dependencyPulse",
                     "--configuration-cache",
                 ).build()
