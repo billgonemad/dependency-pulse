@@ -92,7 +92,7 @@ abstract class DependencyPulseTask : DefaultTask() {
         val githubClient =
             GitHubClient(
                 baseUrl = githubApiBaseUrl.get(),
-                httpClient = httpClient,
+                httpClient = HttpClientProvider.githubHttpClient,
                 token = githubToken.orNull,
                 rateLimitState = githubRateLimitService.get(),
             )

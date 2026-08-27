@@ -2,12 +2,26 @@ package com.billgonemad.dependencypulse
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpResponse
 import java.time.Instant
 
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_TOO_MANY_REQUESTS = 429
+private const val HTTP_MOVED_PERMANENTLY = 301
+private const val HTTP_FOUND = 302
+private const val HTTP_SEE_OTHER = 303
+private const val HTTP_TEMPORARY_REDIRECT = 307
+private const val HTTP_PERMANENT_REDIRECT = 308
+private val REDIRECT_CODES =
+    setOf(
+        HTTP_MOVED_PERMANENTLY,
+        HTTP_FOUND,
+        HTTP_SEE_OTHER,
+        HTTP_TEMPORARY_REDIRECT,
+        HTTP_PERMANENT_REDIRECT,
+    )
 private const val HEADER_RATE_LIMIT_REMAINING = "X-RateLimit-Remaining"
 private const val HEADER_RATE_LIMIT_RESET = "X-RateLimit-Reset"
 private const val HEADER_RETRY_AFTER = "Retry-After"
@@ -39,7 +53,7 @@ internal interface RateLimitState {
 
 open class GitHubClient internal constructor(
     private val baseUrl: String = "https://api.github.com",
-    private val httpClient: HttpClient = HttpClientProvider.httpClient,
+    private val httpClient: HttpClient = HttpClientProvider.githubHttpClient,
     private val token: String? = null,
     private val retryDelayMs: Long = 1_000L,
     private val rateLimitState: RateLimitState = RateLimitState.local(),
@@ -76,7 +90,7 @@ open class GitHubClient internal constructor(
                 safeGet(httpClient, url) {
                     if (token != null) header("Authorization", "Bearer $token")
                 }
-            val response = outcome.orNull()
+            val response = followSameHostRedirect(url, outcome.orNull())
             val statusCode = response?.statusCode()
             if (statusCode == HTTP_FORBIDDEN || statusCode == HTTP_TOO_MANY_REQUESTS) checkRateLimit(response)
             result = response
@@ -89,6 +103,39 @@ open class GitHubClient internal constructor(
         }
         return result
     }
+
+    // GitHub's own redirects (e.g. renamed repos) always land on api.github.com, so pinning to
+    // the original request's host and scheme is safe. A cross-host or scheme-downgrading
+    // Location is left un-followed: the caller sees the raw 3xx, which is treated as a fetch
+    // failure rather than blindly chased (see #81 — defense-in-depth against a redirect
+    // pivoting the client to an arbitrary host).
+    private fun followSameHostRedirect(
+        requestUrl: String,
+        response: HttpResponse<String>?,
+    ): HttpResponse<String>? {
+        val target = sameOriginRedirectTarget(requestUrl, response) ?: return response
+        val redirectedOutcome =
+            safeGet(httpClient, target) {
+                if (token != null) header("Authorization", "Bearer $token")
+            }
+        return redirectedOutcome.orNull() ?: response
+    }
+
+    private fun sameOriginRedirectTarget(
+        requestUrl: String,
+        response: HttpResponse<String>?,
+    ): String? =
+        response
+            ?.takeIf { it.statusCode() in REDIRECT_CODES }
+            ?.headers()
+            ?.firstValue("Location")
+            ?.orElse(null)
+            ?.let { location ->
+                runCatching {
+                    val original = URI.create(requestUrl)
+                    original.resolve(location).takeIf { it.host == original.host && it.scheme == original.scheme }
+                }.getOrNull()?.toString()
+            }
 
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)

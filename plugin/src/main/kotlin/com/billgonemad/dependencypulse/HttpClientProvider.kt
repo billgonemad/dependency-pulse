@@ -10,4 +10,10 @@ internal object HttpClientProvider {
     val httpClient: HttpClient by lazy {
         HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build()
     }
+
+    // NEVER, not NORMAL: GitHubClient pins redirects to the same host itself (see #81),
+    // which requires seeing the 3xx response rather than having it auto-followed here.
+    val githubHttpClient: HttpClient by lazy {
+        HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build()
+    }
 }
