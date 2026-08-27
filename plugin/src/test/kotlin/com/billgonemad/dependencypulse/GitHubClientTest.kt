@@ -285,6 +285,54 @@ class GitHubClientTest {
         assertEquals(Instant.parse("2024-03-20T08:30:00Z"), result.lastCommitDate)
     }
 
+    @Test fun `does not follow a redirect to a different host`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(301)
+                .setHeader("Location", "http://evil.example.invalid/repos/owner/repo"),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertEquals(GitHubSignals.FetchFailed, result)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `does not follow a same-host redirect that changes scheme`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(301)
+                .setHeader("Location", "https://${server.hostName}:${server.port}/repos/owner/repo"),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertEquals(GitHubSignals.FetchFailed, result)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `treats a redirect with no Location header as a fetch failure`() {
+        server.enqueue(MockResponse().setResponseCode(301))
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertEquals(GitHubSignals.FetchFailed, result)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test fun `treats a redirect with a malformed Location header as a fetch failure`() {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(301)
+                .setHeader("Location", "http://exa mple.invalid/repos/owner/repo"),
+        )
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertEquals(GitHubSignals.FetchFailed, result)
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun `two clients sharing the same RateLimitState both see a rate limit tripped by either`() {
         val sharedState = RateLimitState.local()
         val clientA =
