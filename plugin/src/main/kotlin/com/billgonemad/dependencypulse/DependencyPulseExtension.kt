@@ -19,6 +19,10 @@ abstract class DependencyPulseExtension
         abstract val ignoreConfigurations: ListProperty<String>
         abstract val knownStableGroups: ListProperty<String>
         abstract val githubToken: Property<String>
+
+        // Not validated or documented as supported config — see #79.
+        abstract val pomBaseUrl: Property<String>
+        abstract val githubApiBaseUrl: Property<String>
         val thresholds: Thresholds = objects.newInstance(Thresholds::class.java)
 
         fun thresholds(action: Action<Thresholds>) {

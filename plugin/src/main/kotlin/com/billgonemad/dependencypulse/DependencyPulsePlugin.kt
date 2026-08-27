@@ -47,6 +47,8 @@ class DependencyPulsePlugin : Plugin<Project> {
         ext.knownStableGroups.convention(listOf("jakarta.", "javax."))
         ext.thresholds.yellowAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_YELLOW_AFTER_MONTHS)
         ext.thresholds.redAfterMonths.convention(DependencyPulseExtension.Thresholds.DEFAULT_RED_AFTER_MONTHS)
+        ext.pomBaseUrl.convention("https://repo1.maven.org/maven2")
+        ext.githubApiBaseUrl.convention("https://api.github.com")
     }
 
     private fun configureTask(
@@ -55,16 +57,8 @@ class DependencyPulsePlugin : Plugin<Project> {
         ext: DependencyPulseExtension,
         rateLimitService: Provider<GitHubRateLimitService>,
     ) {
-        val pomBaseUrl =
-            project.providers
-                .systemProperty("pomBaseUrl")
-                .orElse("https://repo1.maven.org/maven2")
-        task.pomBaseUrl.set(pomBaseUrl)
-        task.githubApiBaseUrl.set(
-            project.providers
-                .systemProperty("githubApiBaseUrl")
-                .orElse("https://api.github.com"),
-        )
+        task.pomBaseUrl.set(ext.pomBaseUrl)
+        task.githubApiBaseUrl.set(ext.githubApiBaseUrl)
         task.retryDelayMs.set(
             project.providers
                 .systemProperty("mavenCentralRetryDelayMs")
