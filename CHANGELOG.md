@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.3](https://github.com/billgonemad/dependency-pulse/compare/v0.8.2...v0.8.3) (2026-08-29)
+
+
+### Bug Fixes
+
+* pin GitHubClient redirects to the originating host and scheme ([#126](https://github.com/billgonemad/dependency-pulse/issues/126)) ([bbf0103](https://github.com/billgonemad/dependency-pulse/commit/bbf010333154ac359ab138acb255dc7ef04f05f3)), closes [#81](https://github.com/billgonemad/dependency-pulse/issues/81)
+* stop pomBaseUrl/githubApiBaseUrl from being overridable via JVM system properties ([#125](https://github.com/billgonemad/dependency-pulse/issues/125)) ([57f0be8](https://github.com/billgonemad/dependency-pulse/commit/57f0be8438597a087ed0e67efbf514a729368e13)), closes [#79](https://github.com/billgonemad/dependency-pulse/issues/79)
+* surface GitHub found-but-no-commit-data as its own report line ([#129](https://github.com/billgonemad/dependency-pulse/issues/129)) ([13669cf](https://github.com/billgonemad/dependency-pulse/commit/13669cf6eaa176ce1d3b7a19d417928332240640))
+* surface skipped GitHub checks in the report instead of silent GREEN ([#121](https://github.com/billgonemad/dependency-pulse/issues/121)) ([ac26276](https://github.com/billgonemad/dependency-pulse/commit/ac26276a151effa715277400aa3a93fa9602c852))
+
 ## [0.8.2](https://github.com/billgonemad/dependency-pulse/compare/v0.8.1...v0.8.2) (2026-08-17)
 
 
