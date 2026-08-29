@@ -48,9 +48,13 @@ Dependency Pulse Report
 ✅ com.example:widget:2.3.0
    Latest: 2.3.0 | Released: 2 months ago | Active
    GitHub: check skipped (rate limited)
+✅ net.example:steady-io:1.4.2
+   Latest: 1.4.2 | Released: 4 months ago | Active
+   GitHub: repo found, no commit data available
 =======================
-6 dependencies scanned. 1 red, 1 yellow, 2 green, 1 unknown, 1 stable.
+7 dependencies scanned. 1 red, 1 yellow, 3 green, 1 unknown, 1 stable.
 1 GitHub checks skipped (1 rate limited).
+1 GitHub repos found with no commit data available.
 ```
 
 ## Requirements
@@ -256,6 +260,16 @@ Central result and the GitHub result is worse wins:
   is shown — see [Output verbosity](#output-verbosity)), and the summary
   footer tallies the total across the run, e.g.
   `2 GitHub checks skipped (1 rate limited, 1 fetch failed).`
+- If a repo *was* resolved and its archived status *was* confirmed, but the
+  commit-date lookup came back empty, the dependency's status is still
+  unaffected — it's scored on Maven Central data alone, same as the other
+  unresolved-GitHub cases above. This is a different situation from "never
+  checked" (rate-limited/fetch-failed) or "no repo linked" (no resolvable
+  repo), so it gets its own line and its own counter rather than folding
+  into the "GitHub checks skipped" tally: the dependency's line prints
+  `GitHub: repo found, no commit data available` (when the line is shown),
+  and the summary footer tallies it separately, e.g.
+  `1 GitHub repos found with no commit data available.`
 
 ### Known-stable dependencies
 
