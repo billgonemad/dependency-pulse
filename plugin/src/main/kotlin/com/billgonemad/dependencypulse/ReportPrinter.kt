@@ -44,6 +44,7 @@ object ReportPrinter {
                 "$unknown unknown, $stable stable.",
         )
         printGithubSkippedLine(results)
+        printGithubNoCommitDataLine(results)
     }
 
     private fun printGithubSkippedLine(results: List<DependencyInfo>) {
@@ -57,6 +58,16 @@ object ReportPrinter {
                 "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
             ).joinToString(", ")
         println("$skipped GitHub checks skipped ($reasons).")
+    }
+
+    private fun printGithubNoCommitDataLine(results: List<DependencyInfo>) {
+        val noCommitData =
+            results.count {
+                val signals = it.githubSignals
+                signals is GitHubSignals.Found && signals.lastCommitDate == null && !signals.isArchived
+            }
+        if (noCommitData == 0) return
+        println("$noCommitData GitHub repos found with no commit data available.")
     }
 
     private fun selectEmoji(
@@ -116,6 +127,10 @@ object ReportPrinter {
                     signals.lastCommitDate != null -> {
                         val months = monthsAgo(signals.lastCommitDate, now)
                         println("   GitHub: Last commit $months months ago")
+                    }
+
+                    else -> {
+                        println("   GitHub: repo found, no commit data available")
                     }
                 }
             }
