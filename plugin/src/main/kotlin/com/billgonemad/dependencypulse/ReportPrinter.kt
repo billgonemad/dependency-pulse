@@ -117,6 +117,10 @@ object ReportPrinter {
                         val months = monthsAgo(signals.lastCommitDate, now)
                         println("   GitHub: Last commit $months months ago")
                     }
+
+                    else -> {
+                        println("   GitHub: repo found, no commit data available")
+                    }
                 }
             }
 

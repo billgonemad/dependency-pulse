@@ -307,10 +307,10 @@ class ReportPrinterTest {
         assertTrue(output.contains("1 GitHub checks skipped (1 rate limited)."))
     }
 
-    @Test fun `Found with null lastCommitDate and not archived shows no GitHub line`() {
+    @Test fun `Found with null lastCommitDate and not archived shows a no-commit-data caveat`() {
         val depList =
             listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
         val output = capture { ReportPrinter.print(depList) }
-        assertFalse(output.contains("GitHub:"))
+        assertTrue(output.contains("GitHub: repo found, no commit data available"))
     }
 }
