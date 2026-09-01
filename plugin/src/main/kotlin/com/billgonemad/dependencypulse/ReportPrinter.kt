@@ -105,7 +105,9 @@ object ReportPrinter {
                     val months = monthsAgo(signals.latestReleaseDate, now)
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
                     val stablePrefix = if (isStable) "Spec (stable) | " else ""
-                    println("   ${stablePrefix}Latest: ${signals.latestVersion} | Released: $months months ago$active")
+                    val latestLabel =
+                        if (signals.verified) signals.latestVersion else "unknown (repository metadata incomplete)"
+                    println("   ${stablePrefix}Latest: $latestLabel | Released: $months months ago$active")
                 } else {
                     println("   No Maven Central data available")
                 }

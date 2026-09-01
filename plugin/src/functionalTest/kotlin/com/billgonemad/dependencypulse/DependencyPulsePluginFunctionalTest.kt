@@ -422,8 +422,8 @@ class DependencyPulsePluginFunctionalTest {
             "expected no UNKNOWN message:\n${result.output}",
         )
         assertTrue(
-            result.output.contains("Latest: 2.0.16"),
-            "expected the fallback to report currentVersion:\n${result.output}",
+            result.output.contains("Latest: unknown (repository metadata incomplete)"),
+            "expected the honest unverified fallback label, not a fabricated version:\n${result.output}",
         )
         assertTrue(result.output.contains("1 green"))
     }

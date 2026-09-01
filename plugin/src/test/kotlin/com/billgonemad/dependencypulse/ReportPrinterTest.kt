@@ -70,6 +70,21 @@ class ReportPrinterTest {
         assertTrue(output.contains("no longer published"))
     }
 
+    @Test fun `unverified signals print the honest fallback label instead of the raw version`() {
+        val now = Instant.now()
+        val depList =
+            listOf(
+                dep(
+                    signals = MavenSignals("8.14.4", now.minus(180, ChronoUnit.DAYS), verified = false),
+                    status = DepStatus.GREEN,
+                ),
+            )
+        val output = capture { ReportPrinter.print(depList, now = now) }
+        assertTrue(output.contains("Latest: unknown (repository metadata incomplete)"))
+        assertFalse(output.contains("Latest: 8.14.4"))
+        assertTrue(output.contains("6 months ago"))
+    }
+
     @Test fun `UNKNOWN dep shows question mark and unavailable message`() {
         val output =
             capture {
