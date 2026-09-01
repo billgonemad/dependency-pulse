@@ -6,6 +6,7 @@ import java.util.concurrent.Executors
 private const val CONCURRENCY = 8
 private const val MAX_PARENT_DEPTH = 5
 private const val GITHUB_RELEASE_CANDIDATE_LIMIT = 5
+private val CANDIDATE_VERSION_PATTERN = Regex("^[A-Za-z0-9._-]+$")
 
 internal class DependencyAnalyzer(
     private val client: MavenMetadataClient,
@@ -103,7 +104,7 @@ internal class DependencyAnalyzer(
     ): WalkResult {
         val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
         if (walkResult !is WalkResult.Found || walkResult.signals.verified) return walkResult
-        val escalated = escalateViaGithub(coord, repoUrls)
+        val escalated = escalateViaGithub(coord, repoUrls, walkResult.signals)
         return if (escalated != null) WalkResult.Found(escalated) else walkResult
     }
 
@@ -115,11 +116,15 @@ internal class DependencyAnalyzer(
     private fun escalateViaGithub(
         coord: Coords,
         repoUrls: List<String>,
+        unverified: MavenSignals,
     ): MavenSignals? =
         try {
             val githubRepo = resolveGithubRepo(coord, repoUrls) ?: return null
             val tags = githubClient.fetchRecentReleaseTags(githubRepo, GITHUB_RELEASE_CANDIDATE_LIMIT)
-            tags.mapNotNull { tag -> probeTagAcrossRepos(coord, repoUrls, tag) }.maxByOrNull { it.latestReleaseDate }
+            tags
+                .mapNotNull { tag -> probeTagAcrossRepos(coord, repoUrls, tag) }
+                .filter { it.latestReleaseDate.isAfter(unverified.latestReleaseDate) }
+                .maxByOrNull { it.latestReleaseDate }
         } catch (
             @Suppress("TooGenericExceptionCaught") ignored: Exception,
         ) {
@@ -132,8 +137,18 @@ internal class DependencyAnalyzer(
         tag: String,
     ): MavenSignals? {
         for (candidate in normalizeTagToVersionCandidates(tag, coord.artifact)) {
+            val looksLikeCandidate = !isPreRelease(candidate) && !isTimestampVersion(candidate)
+            if (!looksLikeCandidate || !CANDIDATE_VERSION_PATTERN.matches(candidate)) continue
             for (repoUrl in repoUrls) {
-                client.probeVersion(coord.group, coord.artifact, candidate, repoUrl)?.let { return it }
+                val signals =
+                    try {
+                        client.probeVersion(coord.group, coord.artifact, candidate, repoUrl)
+                    } catch (
+                        @Suppress("TooGenericExceptionCaught") ignored: Exception,
+                    ) {
+                        null
+                    }
+                signals?.let { return it }
             }
         }
         return null

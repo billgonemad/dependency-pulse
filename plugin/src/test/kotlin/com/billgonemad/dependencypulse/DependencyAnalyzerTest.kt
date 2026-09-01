@@ -314,6 +314,86 @@ class DependencyAnalyzerTest {
         assertEquals("2.0.0", results[0].mavenSignals?.latestVersion)
     }
 
+    @Test fun `rejects a GitHub candidate older than the unverified currentVersion signals`() {
+        val unverified = MavenSignals("2.0.0", now.minus(30, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val olderCandidate = MavenSignals("1.5.0", now.minus(400, java.time.temporal.ChronoUnit.DAYS), verified = true)
+        val client = stubClientWithProbe(unverified) { version -> if (version == "1.5.0") olderCandidate else null }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("org/widget"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v1.5.0")),
+            )
+
+        val results =
+            analyzer.analyze(setOf(Coords("org.example", "widget", "2.0.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(unverified, results[0].mavenSignals)
+    }
+
+    @Test fun `skips a pre-release candidate tag even when it resolves`() {
+        val unverified = MavenSignals("1.0.0", now.minus(400, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val probedVersions = mutableListOf<String>()
+        val client =
+            stubClientWithProbe(unverified) { version ->
+                probedVersions.add(version)
+                MavenSignals(version, now, verified = true)
+            }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("org/widget"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0-RC1")),
+            )
+
+        analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(emptyList<String>(), probedVersions)
+    }
+
+    @Test fun `continues to the next repo when one repo throws during escalation probing`() {
+        val unverified = MavenSignals("1.0.0", now.minus(400, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val verifiedCandidate = MavenSignals("2.0.0", now, verified = true)
+        val client =
+            object : MavenMetadataClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                    baseUrl: String,
+                ) = unverified
+
+                override fun probeVersion(
+                    group: String,
+                    artifact: String,
+                    version: String,
+                    baseUrl: String,
+                ): MavenSignals? =
+                    if (baseUrl.endsWith("first")) {
+                        error("simulated repo failure")
+                    } else {
+                        verifiedCandidate
+                    }
+            }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("org/widget"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0")),
+            )
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "widget", "1.0.0")),
+                listOf("https://repo.example.com/first", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(verifiedCandidate, results[0].mavenSignals)
+    }
+
     @Test fun `sets knownStable when the coordinate matches a configured group prefix`() {
         val analyzer = analyzerWith(greenSignals)
 

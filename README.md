@@ -282,8 +282,9 @@ dependency's own current version, it doesn't just report that version as
 newest release. In that case, if the dependency's POM links to a GitHub
 repository, the plugin checks that repo's 5 most recent releases,
 generates plausible Maven version strings from each release tag, and
-probes each one against your declared repositories. The first one that
-actually resolves becomes the verified `Latest:` value.
+probes each one against your declared repositories. Whichever verified
+candidate has the freshest real release date — genuinely newer than the
+version you're on — becomes the `Latest:` value.
 
 If no GitHub repo is linked, the repo has no releases, or none of the
 candidates resolve, the plugin doesn't guess — it says so:
