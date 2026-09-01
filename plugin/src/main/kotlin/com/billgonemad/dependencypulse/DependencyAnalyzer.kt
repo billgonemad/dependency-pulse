@@ -94,8 +94,6 @@ internal class DependencyAnalyzer(
     // MavenMetadataClient's two fallback branches), try to discover the real latest via GitHub
     // before giving up. Only runs in that rare case: a verified Found result, NotPublished, and
     // Unresolvable are all returned unchanged. See #114 / the GitHub-verified-candidate design doc.
-    // Written with a trailing if/else rather than `escalateViaGithub(...) ?: return walkResult` to
-    // stay at 2 return statements, not 3 — detekt's ReturnCount(max=2) flags the 3-return form.
     private fun resolveWalkResult(
         coord: Coords,
         repoUrls: List<String>,
