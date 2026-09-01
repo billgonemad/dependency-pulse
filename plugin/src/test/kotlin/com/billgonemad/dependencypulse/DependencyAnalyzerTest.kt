@@ -38,6 +38,39 @@ class DependencyAnalyzerTest {
             ): MavenSignals? = error("simulated network failure")
         }
 
+    private fun stubClientWithProbe(
+        signals: MavenSignals?,
+        probe: (String) -> MavenSignals?,
+    ): MavenMetadataClient =
+        object : MavenMetadataClient() {
+            override fun fetchSignals(
+                group: String,
+                artifact: String,
+                currentVersion: String,
+                baseUrl: String,
+            ) = signals
+
+            override fun probeVersion(
+                group: String,
+                artifact: String,
+                version: String,
+                baseUrl: String,
+            ) = probe(version)
+        }
+
+    private fun stubGithubClientWithReleases(
+        signals: GitHubSignals,
+        releaseTags: List<String>,
+    ): GitHubClient =
+        object : GitHubClient() {
+            override fun fetchSignals(ownerRepo: String) = signals
+
+            override fun fetchRecentReleaseTags(
+                ownerRepo: String,
+                limit: Int,
+            ) = releaseTags
+        }
+
     private fun stubPomClient(repo: String? = null): PomClient =
         object : PomClient() {
             override fun lookupGitHubRepo(
@@ -130,6 +163,155 @@ class DependencyAnalyzerTest {
 
         assertEquals(githubSignals, results[0].githubSignals)
         assertEquals(DepStatus.RED, results[0].status)
+    }
+
+    @Test fun `escalates to a verified GitHub-derived candidate when the maven walk is unverified`() {
+        val unverified = MavenSignals("8.14.4", now.minus(180, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val verifiedCandidate = MavenSignals("9.7.1", now, verified = true)
+        val client =
+            stubClientWithProbe(unverified) { version -> if (version == "9.7.1") verifiedCandidate else null }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("gradle/gradle"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v9.7.1")),
+            )
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.gradle", "gradle-tooling-api", "8.14.4")),
+                singleRepoUrls,
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(verifiedCandidate, results[0].mavenSignals)
+    }
+
+    @Test fun `falls back to the unverified signals when no GitHub candidate resolves`() {
+        val unverified = MavenSignals("8.14.4", now.minus(180, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val client = stubClientWithProbe(unverified) { null }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("gradle/gradle"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v9.7.1")),
+            )
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.gradle", "gradle-tooling-api", "8.14.4")),
+                singleRepoUrls,
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(unverified, results[0].mavenSignals)
+    }
+
+    @Test fun `skips escalation entirely when no GitHub repo can be resolved`() {
+        val unverified = MavenSignals("8.14.4", now.minus(180, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        var releaseCallCount = 0
+        val githubClient =
+            object : GitHubClient() {
+                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now, isArchived = false)
+
+                override fun fetchRecentReleaseTags(
+                    ownerRepo: String,
+                    limit: Int,
+                ): List<String> {
+                    releaseCallCount++
+                    return listOf("v9.7.1")
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(unverified), stubPomClient(null), githubClient)
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.gradle", "gradle-tooling-api", "8.14.4")),
+                singleRepoUrls,
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(unverified, results[0].mavenSignals)
+        assertEquals(0, releaseCallCount)
+    }
+
+    @Test fun `never attempts escalation when the maven walk result is already verified`() {
+        var releaseCallCount = 0
+        val githubClient =
+            object : GitHubClient() {
+                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now, isArchived = false)
+
+                override fun fetchRecentReleaseTags(
+                    ownerRepo: String,
+                    limit: Int,
+                ): List<String> {
+                    releaseCallCount++
+                    return listOf("v9.7.1")
+                }
+            }
+        val analyzer = DependencyAnalyzer(stubClient(greenSignals), stubPomClient("gradle/gradle"), githubClient)
+
+        val results =
+            analyzer.analyze(setOf(Coords("org.example", "fresh", "1.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(greenSignals, results[0].mavenSignals)
+        assertEquals(0, releaseCallCount)
+    }
+
+    @Test fun `tries normalized candidates in order and stops at the first that resolves`() {
+        val unverified = MavenSignals("1.0.0", now.minus(180, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val probedVersions = mutableListOf<String>()
+        val client =
+            stubClientWithProbe(unverified) { version ->
+                probedVersions.add(version)
+                if (version == "2.0.0") MavenSignals("2.0.0", now, verified = true) else null
+            }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("org/widget"),
+                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0")),
+            )
+
+        analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(listOf("v2.0.0", "2.0.0"), probedVersions)
+    }
+
+    @Test fun `picks the freshest verified candidate across releases, not just the first that resolves`() {
+        val unverified = MavenSignals("1.0.0", now.minus(400, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val client =
+            stubClientWithProbe(unverified) { version ->
+                when (version) {
+                    "1.5.0" -> MavenSignals("1.5.0", now.minus(60, java.time.temporal.ChronoUnit.DAYS), verified = true)
+                    "2.0.0" -> MavenSignals("2.0.0", now, verified = true)
+                    else -> null
+                }
+            }
+        val analyzer =
+            DependencyAnalyzer(
+                client,
+                stubPomClient("org/widget"),
+                // Deliberately lists the older release before the newer one — GitHub's list order
+                // isn't a documented contract this design relies on (see spec's "Candidate source"),
+                // so this proves the freshest verified candidate wins regardless of list position,
+                // not whichever tag happens to resolve first.
+                stubGithubClientWithReleases(
+                    GitHubSignals.Found(now, isArchived = false),
+                    listOf("v1.5.0", "v2.0.0"),
+                ),
+            )
+
+        val results =
+            analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals("2.0.0", results[0].mavenSignals?.latestVersion)
     }
 
     @Test fun `sets knownStable when the coordinate matches a configured group prefix`() {

@@ -5,6 +5,7 @@ import java.util.concurrent.Executors
 
 private const val CONCURRENCY = 8
 private const val MAX_PARENT_DEPTH = 5
+private const val GITHUB_RELEASE_CANDIDATE_LIMIT = 5
 
 internal class DependencyAnalyzer(
     private val client: MavenMetadataClient,
@@ -42,7 +43,7 @@ internal class DependencyAnalyzer(
         val (group, artifact, version) = coord
         val githubSignals = resolveGithubSignals(coord, repoUrls)
         val knownStable = matchesKnownStableGroup(coord, knownStableGroups)
-        val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
+        val walkResult = resolveWalkResult(coord, repoUrls, yellowAfterMonths, redAfterMonths)
         return when (walkResult) {
             is WalkResult.Found -> {
                 DependencyInfo(
@@ -86,6 +87,56 @@ internal class DependencyAnalyzer(
                 )
             }
         }
+    }
+
+    // If the Maven walk's best answer is unverified (it's just currentVersion echoed back — see
+    // MavenMetadataClient's two fallback branches), try to discover the real latest via GitHub
+    // before giving up. Only runs in that rare case: a verified Found result, NotPublished, and
+    // Unresolvable are all returned unchanged. See #114 / the GitHub-verified-candidate design doc.
+    // Written with a trailing if/else rather than `escalateViaGithub(...) ?: return walkResult` to
+    // stay at 2 return statements, not 3 — detekt's ReturnCount(max=2) flags the 3-return form.
+    private fun resolveWalkResult(
+        coord: Coords,
+        repoUrls: List<String>,
+        yellowAfterMonths: Int,
+        redAfterMonths: Int,
+    ): WalkResult {
+        val walkResult = walkRepos(coord, repoUrls, yellowAfterMonths, redAfterMonths)
+        if (walkResult !is WalkResult.Found || walkResult.signals.verified) return walkResult
+        val escalated = escalateViaGithub(coord, repoUrls)
+        return if (escalated != null) WalkResult.Found(escalated) else walkResult
+    }
+
+    // Independent of resolveGithubSignals's try/catch below — a failure here (GitHub unreachable,
+    // rate limited, malformed response, no repo resolvable, no candidate resolves) degrades to
+    // "no candidate found," which is exactly the unverified state resolveWalkResult already had.
+    // It never affects githubSignals/the GitHub-repo-health report line, a separate concern
+    // resolved separately by resolveGithubSignals.
+    private fun escalateViaGithub(
+        coord: Coords,
+        repoUrls: List<String>,
+    ): MavenSignals? =
+        try {
+            val githubRepo = resolveGithubRepo(coord, repoUrls) ?: return null
+            val tags = githubClient.fetchRecentReleaseTags(githubRepo, GITHUB_RELEASE_CANDIDATE_LIMIT)
+            tags.mapNotNull { tag -> probeTagAcrossRepos(coord, repoUrls, tag) }.maxByOrNull { it.latestReleaseDate }
+        } catch (
+            @Suppress("TooGenericExceptionCaught") ignored: Exception,
+        ) {
+            null
+        }
+
+    private fun probeTagAcrossRepos(
+        coord: Coords,
+        repoUrls: List<String>,
+        tag: String,
+    ): MavenSignals? {
+        for (candidate in normalizeTagToVersionCandidates(tag, coord.artifact)) {
+            for (repoUrl in repoUrls) {
+                client.probeVersion(coord.group, coord.artifact, candidate, repoUrl)?.let { return it }
+            }
+        }
+        return null
     }
 
     private fun walkRepos(
