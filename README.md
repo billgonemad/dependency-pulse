@@ -271,6 +271,34 @@ Central result and the GitHub result is worse wins:
   and the summary footer tallies it separately, e.g.
   `1 GitHub repos found with no commit data available.`
 
+### GitHub-verified candidate versions
+
+Some repositories serve a `maven-metadata.xml` that's stale or incomplete —
+a proxying Artifactory instance can serve one upstream's metadata for a
+coordinate whose actual artifacts come from a different upstream, for
+example. When that happens and the plugin's only fallback is the
+dependency's own current version, it doesn't just report that version as
+`Latest:` — the age it reports is real, but it isn't confirmed to be the
+newest release. In that case, if the dependency's POM links to a GitHub
+repository, the plugin checks that repo's 5 most recent releases,
+generates plausible Maven version strings from each release tag, and
+probes each one against your declared repositories. The first one that
+actually resolves becomes the verified `Latest:` value.
+
+If no GitHub repo is linked, the repo has no releases, or none of the
+candidates resolve, the plugin doesn't guess — it says so:
+
+````
+```
+✅ org.gradle:gradle-tooling-api:8.14.4
+   Latest: unknown (repository metadata incomplete) | Released: 6 months ago | Active
+```
+````
+
+The age, emoji, and RED/YELLOW/GREEN verdict are still driven by the dependency's
+real release date either way (6 months old is well within the default GREEN threshold, hence `✅` and `| Active` here, same as any other GREEN row) — only the `Latest:` label changes between a
+confirmed version string and this honest fallback.
+
 ### Known-stable dependencies
 
 Some artifacts — spec/API jars like Jakarta EE and legacy `javax.*` packages —
