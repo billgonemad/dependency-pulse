@@ -14,6 +14,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -73,6 +74,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
         assertEquals(Instant.parse("2024-07-31T00:00:00Z"), result.latestReleaseDate)
+        assertTrue(result.verified)
     }
 
     @Test fun `returns null when artifact not found on Central`() {
@@ -174,6 +176,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-01T00:00:00Z"), result.latestReleaseDate)
+        assertFalse(result.verified)
         server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
         server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (404)
         val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -191,6 +194,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-02T00:00:00Z"), result.latestReleaseDate)
+        assertFalse(result.verified)
         server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml
         server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // selected version's POM (no header)
         val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
@@ -228,6 +232,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("1.0.0", result.latestVersion)
         assertEquals(Instant.parse("2024-01-03T00:00:00Z"), result.latestReleaseDate)
+        assertFalse(result.verified)
         server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS) // maven-metadata.xml (404)
         val fallbackRequest = server.takeRequest(TAKE_REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         assertNotNull(fallbackRequest)
@@ -450,6 +455,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("8.14.4", result.latestVersion)
         assertEquals(Instant.parse("2026-01-23T16:32:28Z"), result.latestReleaseDate)
+        assertFalse(result.verified)
     }
 
     @Test fun `keeps an explicit latest tag when the verified currentVersion is older`() {
@@ -462,6 +468,7 @@ class MavenMetadataClientTest {
         assertNotNull(result)
         assertEquals("2.0.16", result.latestVersion)
         assertEquals(Instant.parse("2025-02-25T16:43:14Z"), result.latestReleaseDate)
+        assertTrue(result.verified)
         assertEquals(3, server.requestCount)
     }
 
@@ -473,6 +480,25 @@ class MavenMetadataClientTest {
                 client.fetchSignals("com.example", "empty-metadata", "1.0.0")
             }
         assertTrue(ex.message?.contains("latest") == true)
+    }
+
+    @Test fun `probeVersion returns signals for a version whose POM resolves`() {
+        server.enqueue(pomResponse("Wed, 31 Jul 2024 00:00:00 GMT"))
+
+        val result = client.probeVersion("org.slf4j", "slf4j-api", "2.0.18")
+
+        assertNotNull(result)
+        assertEquals("2.0.18", result.latestVersion)
+        assertEquals(Instant.parse("2024-07-31T00:00:00Z"), result.latestReleaseDate)
+        assertTrue(result.verified)
+    }
+
+    @Test fun `probeVersion returns null for a version whose POM 404s`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val result = client.probeVersion("org.slf4j", "slf4j-api", "999.0.0")
+
+        assertNull(result)
     }
 }
 
