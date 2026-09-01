@@ -9,20 +9,21 @@
           kotlin-stdlib. OWASP's `cpe:2.3:a:jetbrains:kotlin` match flags EVERY
           Kotlin artifact, including the kotlin-stdlib this plugin actually ships
           — a false positive for our runtime attack surface.
-        - Fixed upstream in Kotlin 2.4.20, which has NO stable release as of
-          2026-06-29 (only 2.4.20-Beta1 / 2.4.10-RC exist). There is no stable
-          version we can upgrade to that clears the finding, so we cannot remediate
-          by version bump yet.
+        - Fixed upstream in Kotlin 2.4.20, which STILL has no stable release as of
+          2026-09-01 (only 2.4.20-RC2 exists — see kotlin-stdlib maven-metadata.xml
+          on Maven Central). There is no stable version we can upgrade to that
+          clears the finding, so we cannot remediate by version bump yet.
 
       Tracking: issue #42 — bump Kotlin to 2.4.20 and delete this suppression once
       2.4.20 ships stable. The `until` date forces this finding to re-surface if
       forgotten.
     -->
-    <suppress until="2026-08-31Z">
+    <suppress until="2026-09-30Z">
         <notes><![CDATA[
         Kotlin compiler build-cache deserialization (CWE-502). CPE false-positive
         against shipped kotlin-stdlib; no stable fixed release (2.4.20) available
-        as of 2026-06-29. Remove after upgrading to Kotlin 2.4.20 stable.
+        as of 2026-09-01 (2.4.20-RC2 is latest). Remove after upgrading to Kotlin
+        2.4.20 stable.
         ]]></notes>
         <cve>CVE-2026-53914</cve>
     </suppress>
