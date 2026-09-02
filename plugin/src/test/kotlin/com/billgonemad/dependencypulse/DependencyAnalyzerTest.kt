@@ -211,6 +211,16 @@ class DependencyAnalyzerTest {
         assertEquals(unverified, results[0].mavenSignals)
     }
 
+    @Test fun `falls back to the unverified signals when GitHub repo resolution throws during escalation`() {
+        val unverified = MavenSignals("1.0.0", now.minus(400, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val analyzer = DependencyAnalyzer(stubClient(unverified), throwingPomClient(), stubGithubClient())
+
+        val results =
+            analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertEquals(unverified, results[0].mavenSignals)
+    }
+
     @Test fun `skips escalation entirely when no GitHub repo can be resolved`() {
         val unverified = MavenSignals("8.14.4", now.minus(180, java.time.temporal.ChronoUnit.DAYS), verified = false)
         var releaseCallCount = 0
@@ -532,6 +542,68 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.GREEN, results[0].status)
         assertEquals(2, calledBaseUrls.size)
+    }
+
+    @Test fun `keeps walking past an unverified GREEN result to find a verified one`() {
+        val unverifiedFresh = MavenSignals("8.14.4", now, verified = false)
+        val verifiedOlder = MavenSignals("8.14.4", now.minus(1, java.time.temporal.ChronoUnit.DAYS), verified = true)
+        val calledBaseUrls = mutableListOf<String>()
+        val client =
+            object : MavenMetadataClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                    baseUrl: String,
+                ): MavenSignals? {
+                    calledBaseUrls.add(baseUrl)
+                    return if (baseUrl.endsWith("second")) verifiedOlder else unverifiedFresh
+                }
+            }
+        val analyzer = DependencyAnalyzer(client, stubPomClient(), stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "foo", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(2, calledBaseUrls.size)
+        assertEquals(verifiedOlder, results[0].mavenSignals)
+    }
+
+    @Test fun `tries every repo when none are verified, keeping the freshest unverified result`() {
+        val olderUnverified = MavenSignals("1.0", now.minus(10, java.time.temporal.ChronoUnit.DAYS), verified = false)
+        val newerUnverified = MavenSignals("1.0", now, verified = false)
+        val calledBaseUrls = mutableListOf<String>()
+        val client =
+            object : MavenMetadataClient() {
+                override fun fetchSignals(
+                    group: String,
+                    artifact: String,
+                    currentVersion: String,
+                    baseUrl: String,
+                ): MavenSignals? {
+                    calledBaseUrls.add(baseUrl)
+                    return if (baseUrl.endsWith("second")) newerUnverified else olderUnverified
+                }
+            }
+        val analyzer = DependencyAnalyzer(client, stubPomClient(), stubGithubClient())
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("org.example", "foo", "1.0")),
+                listOf("https://repo1.maven.org/maven2", "https://repo.example.com/second"),
+                12,
+                24,
+                emptyList(),
+            )
+
+        assertEquals(2, calledBaseUrls.size)
+        assertEquals(newerUnverified, results[0].mavenSignals)
     }
 
     @Test fun `returns RED when every declared repo returns a clean 404`() {

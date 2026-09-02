@@ -8,6 +8,11 @@ private const val MAX_PARENT_DEPTH = 5
 private const val GITHUB_RELEASE_CANDIDATE_LIMIT = 5
 private val CANDIDATE_VERSION_PATTERN = Regex("^[A-Za-z0-9._-]+$")
 
+// Verified beats unverified regardless of date — an unverified GREEN result (currentVersion echoed
+// back, see MavenMetadataClient) is still just a guess, so a later repo's confirmed answer should
+// win even if it isn't strictly fresher. Only once verified-ness ties does freshest-by-date decide.
+private val MAVEN_SIGNALS_PRIORITY: Comparator<MavenSignals> = compareBy({ it.verified }, { it.latestReleaseDate })
+
 internal class DependencyAnalyzer(
     private val client: MavenMetadataClient,
     private val pomClient: PomClient,
@@ -164,12 +169,12 @@ internal class DependencyAnalyzer(
         for (repoUrl in repoUrls) {
             when (val attempt = attemptFetch(coord, repoUrl)) {
                 is RepoAttempt.Signals -> {
-                    val isFresher =
-                        bestSignals == null || attempt.signals.latestReleaseDate.isAfter(bestSignals.latestReleaseDate)
-                    if (isFresher) {
-                        bestSignals = attempt.signals
-                    }
-                    if (mavenStatus(attempt.signals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN) break
+                    val signals = attempt.signals
+                    bestSignals = bestSignals?.let { maxOf(it, signals, MAVEN_SIGNALS_PRIORITY) } ?: signals
+                    val isConfirmedGreen =
+                        bestSignals.verified &&
+                            mavenStatus(bestSignals, yellowAfterMonths, redAfterMonths) == DepStatus.GREEN
+                    if (isConfirmedGreen) break
                 }
 
                 RepoAttempt.NotFound -> {}
