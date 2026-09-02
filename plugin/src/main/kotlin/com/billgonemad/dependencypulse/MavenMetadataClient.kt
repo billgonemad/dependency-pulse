@@ -1,6 +1,5 @@
 package com.billgonemad.dependencypulse
 
-import org.w3c.dom.Document
 import org.w3c.dom.Element
 import java.io.IOException
 import java.net.http.HttpClient
@@ -46,10 +45,7 @@ open class MavenMetadataClient(
         currentVersion: String,
         baseUrl: String = this.baseUrl,
     ): MavenSignals? {
-        fun signalsFor(version: String) =
-            fetchLastModified(group, artifact, version, baseUrl)?.let { date ->
-                MavenSignals(latestVersion = version, latestReleaseDate = date)
-            }
+        fun signalsFor(version: String) = probeVersion(group, artifact, version, baseUrl)
         val metadata = fetchMetadata(group, artifact, baseUrl)
         val selected = metadata?.let { selectLatestVersion(it.latest, it.orderedVersions, currentVersion) }
         val selectedSignals = selected?.let(::signalsFor)
@@ -60,7 +56,7 @@ open class MavenMetadataClient(
                 // If selected already equals currentVersion, its POM was just probed above and found
                 // unusable — re-probing the same URL would just repeat the identical failed request, so
                 // skip straight to null instead of falling through to the currentVersion fallback.
-                if (selected == currentVersion) null else signalsFor(currentVersion)
+                if (selected == currentVersion) null else unverified(signalsFor(currentVersion))
             }
 
             shouldVerifyCurrentVersion -> {
@@ -72,6 +68,16 @@ open class MavenMetadataClient(
             }
         }
     }
+
+    open fun probeVersion(
+        group: String,
+        artifact: String,
+        version: String,
+        baseUrl: String = this.baseUrl,
+    ): MavenSignals? =
+        fetchLastModified(group, artifact, version, baseUrl)?.let { date ->
+            MavenSignals(latestVersion = version, latestReleaseDate = date)
+        }
 
     private fun fetchMetadata(
         group: String,
@@ -150,7 +156,19 @@ open class MavenMetadataClient(
         xml: String,
         url: String,
     ): ArtifactMetadata {
-        val document = parseXml(xml) ?: throw IOException("Malformed maven-metadata.xml from $url")
+        val document =
+            try {
+                val factory =
+                    DocumentBuilderFactory.newInstance().apply {
+                        setFeature(DISALLOW_DOCTYPE_FEATURE, true)
+                        isExpandEntityReferences = false
+                    }
+                factory.newDocumentBuilder().parse(xml.byteInputStream())
+            } catch (
+                @Suppress("TooGenericExceptionCaught") ignored: Exception,
+            ) {
+                null
+            } ?: throw IOException("Malformed maven-metadata.xml from $url")
         val versioning = requireChild(firstChildElement(document.documentElement, "versioning"), "versioning", url)
         val versions = firstChildElement(versioning, "versions")?.let { allChildText(it, "version") } ?: emptyList()
         val declaredLatest = firstChildText(versioning, "latest")
@@ -163,20 +181,6 @@ open class MavenMetadataClient(
         tagName: String,
         url: String,
     ): T = value ?: throw IOException("Missing <$tagName> in maven-metadata.xml from $url")
-
-    private fun parseXml(xml: String): Document? =
-        try {
-            val factory =
-                DocumentBuilderFactory.newInstance().apply {
-                    setFeature(DISALLOW_DOCTYPE_FEATURE, true)
-                    isExpandEntityReferences = false
-                }
-            factory.newDocumentBuilder().parse(xml.byteInputStream())
-        } catch (
-            @Suppress("TooGenericExceptionCaught") ignored: Exception,
-        ) {
-            null
-        }
 
     private fun firstChildElement(
         parent: Element,
@@ -232,12 +236,14 @@ private fun needsCurrentVersionCheck(
     currentVersion: String,
 ): Boolean = selected != currentVersion && currentVersion !in metadata.orderedVersions
 
+private fun unverified(signals: MavenSignals?): MavenSignals? = signals?.copy(verified = false)
+
 private fun freshestOf(
     candidate: MavenSignals?,
     fallback: MavenSignals,
 ): MavenSignals =
     if (candidate != null && candidate.latestReleaseDate.isAfter(fallback.latestReleaseDate)) {
-        candidate
+        candidate.copy(verified = false)
     } else {
         fallback
     }

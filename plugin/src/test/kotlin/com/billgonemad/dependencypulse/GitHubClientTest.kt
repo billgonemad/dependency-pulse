@@ -15,6 +15,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GitHubClientTest {
     private lateinit var server: MockWebServer
@@ -431,6 +432,50 @@ class GitHubClientTest {
     @Test fun `does not retry a malformed-uri failure`() {
         assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo with spaces"))
         assertEquals(0, server.requestCount)
+    }
+
+    @Test fun `fetches non-prerelease non-draft release tags newest first`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                [
+                  {"tag_name":"v9.7.1","prerelease":false,"draft":false},
+                  {"tag_name":"v9.7.0","prerelease":false,"draft":false},
+                  {"tag_name":"v9.7.0-RC3","prerelease":true,"draft":false},
+                  {"tag_name":"v9.8.0-draft","prerelease":false,"draft":true}
+                ]
+                """.trimIndent(),
+            ),
+        )
+
+        val tags = client.fetchRecentReleaseTags("gradle/gradle", limit = 5)
+
+        assertEquals(listOf("v9.7.1", "v9.7.0"), tags)
+    }
+
+    @Test fun `requests the per_page query parameter matching the given limit`() {
+        server.enqueue(MockResponse().setBody("[]"))
+
+        client.fetchRecentReleaseTags("gradle/gradle", limit = 3)
+
+        val request = server.takeRequest()
+        assertTrue(request.path?.contains("per_page=3") == true)
+    }
+
+    @Test fun `returns an empty list when the repo has no releases`() {
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        val tags = client.fetchRecentReleaseTags("owner/no-releases", limit = 5)
+
+        assertEquals(emptyList(), tags)
+    }
+
+    @Test fun `returns an empty list for malformed release json`() {
+        server.enqueue(MockResponse().setBody("not json"))
+
+        val tags = client.fetchRecentReleaseTags("owner/repo", limit = 5)
+
+        assertEquals(emptyList(), tags)
     }
 }
 

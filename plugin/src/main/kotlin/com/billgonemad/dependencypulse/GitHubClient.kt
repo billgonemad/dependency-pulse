@@ -81,6 +81,27 @@ open class GitHubClient internal constructor(
         return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
     }
 
+    open fun fetchRecentReleaseTags(
+        ownerRepo: String,
+        limit: Int,
+    ): List<String> {
+        val response = get("$baseUrl/repos/$ownerRepo/releases?per_page=$limit") ?: return emptyList()
+        return if (response.statusCode() != HTTP_OK) {
+            emptyList()
+        } else {
+            try {
+                DEFAULT_JSON
+                    .decodeFromString<List<ReleaseResponse>>(response.body())
+                    .filterNot { it.prerelease || it.draft }
+                    .map { it.tagName }
+            } catch (
+                @Suppress("TooGenericExceptionCaught") ignored: Exception,
+            ) {
+                emptyList()
+            }
+        }
+    }
+
     private fun get(url: String): HttpResponse<String>? {
         if (isRateLimited()) return null
         var attempt = 0
@@ -113,29 +134,24 @@ open class GitHubClient internal constructor(
         requestUrl: String,
         response: HttpResponse<String>?,
     ): HttpResponse<String>? {
-        val target = sameOriginRedirectTarget(requestUrl, response) ?: return response
+        val target =
+            response
+                ?.takeIf { it.statusCode() in REDIRECT_CODES }
+                ?.headers()
+                ?.firstValue("Location")
+                ?.orElse(null)
+                ?.let { location ->
+                    runCatching {
+                        val original = URI.create(requestUrl)
+                        original.resolve(location).takeIf { it.host == original.host && it.scheme == original.scheme }
+                    }.getOrNull()?.toString()
+                } ?: return response
         val redirectedOutcome =
             safeGet(httpClient, target) {
                 if (token != null) header("Authorization", "Bearer $token")
             }
         return redirectedOutcome.orNull() ?: response
     }
-
-    private fun sameOriginRedirectTarget(
-        requestUrl: String,
-        response: HttpResponse<String>?,
-    ): String? =
-        response
-            ?.takeIf { it.statusCode() in REDIRECT_CODES }
-            ?.headers()
-            ?.firstValue("Location")
-            ?.orElse(null)
-            ?.let { location ->
-                runCatching {
-                    val original = URI.create(requestUrl)
-                    original.resolve(location).takeIf { it.host == original.host && it.scheme == original.scheme }
-                }.getOrNull()?.toString()
-            }
 
     private fun checkRateLimit(response: HttpResponse<String>) {
         val remaining = response.headers().firstValue(HEADER_RATE_LIMIT_REMAINING).orElse(null)
@@ -211,4 +227,11 @@ private data class CommitDetail(
 @Serializable
 private data class CommitterDetail(
     val date: String? = null,
+)
+
+@Serializable
+private data class ReleaseResponse(
+    @SerialName("tag_name") val tagName: String,
+    val prerelease: Boolean = false,
+    val draft: Boolean = false,
 )
