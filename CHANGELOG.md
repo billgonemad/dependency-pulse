@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/billgonemad/dependency-pulse/compare/v0.8.3...v0.8.4) (2026-09-05)
+
+
+### Bug Fixes
+
+* discover the real latest version via GitHub when Maven metadata is incomplete ([#130](https://github.com/billgonemad/dependency-pulse/issues/130)) ([aeb307c](https://github.com/billgonemad/dependency-pulse/commit/aeb307c8a6f3d394fd582e778e6a34bba85538cd))
+
 ## [0.8.3](https://github.com/billgonemad/dependency-pulse/compare/v0.8.2...v0.8.3) (2026-08-29)
 
 
