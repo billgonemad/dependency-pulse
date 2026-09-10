@@ -14,12 +14,12 @@
 # failOnSeverity API the design spec originally referenced).
 detekt = "1.23.8"
 owasp-dependency-check = "13.0.0"
-kotlin = "2.4.10"
+kotlin = "2.4.20"
 kotlinx-serialization = "1.11.0"
 ktlint = "1.8.0"       # latest stable verified at impl time
 mockwebserver = "5.5.0"
-spotless = "8.10.1"     # latest stable verified at impl time
-plugin-publish = "2.1.1"
+spotless = "8.10.2"     # latest stable verified at impl time
+plugin-publish = "2.2.0"
 
 [libraries]
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
