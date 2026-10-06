@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/billgonemad/dependency-pulse/compare/v0.8.4...v0.9.0) (2026-10-06)
+
+
+### Features
+
+* default githubToken to the GITHUB_TOKEN environment variable ([#140](https://github.com/billgonemad/dependency-pulse/issues/140)) ([bf0319b](https://github.com/billgonemad/dependency-pulse/commit/bf0319bf5d124b55cfd59a882ce37f2002d3b5be))
+
 ## [0.8.4](https://github.com/billgonemad/dependency-pulse/compare/v0.8.3...v0.8.4) (2026-09-21)
 
 
