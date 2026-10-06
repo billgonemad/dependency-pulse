@@ -73,7 +73,11 @@ class DependencyPulsePlugin : Plugin<Project> {
         task.knownStableGroups.set(ext.knownStableGroups)
         task.yellowAfterMonths.set(ext.thresholds.yellowAfterMonths)
         task.redAfterMonths.set(ext.thresholds.redAfterMonths)
-        task.githubToken.set(ext.githubToken)
+        task.githubToken.set(
+            ext.githubToken.orElse(
+                project.providers.environmentVariable("GITHUB_TOKEN").map { it.takeIf(String::isNotBlank) },
+            ),
+        )
         task.githubRateLimitService.set(rateLimitService)
         task.usesService(rateLimitService)
         task.dependencyCoordinates.set(

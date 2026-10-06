@@ -140,7 +140,7 @@ dependencyPulse {
         "testRuntimeClasspath",
     )
     knownStableGroups = listOf("jakarta.", "javax.")  // spec/API artifacts exempt from staleness scoring
-    githubToken = null          // GitHub token to raise the API rate limit (60/hr -> 5,000/hr)
+    githubToken = null          // GitHub token to raise the API rate limit (60/hr -> 5,000/hr); defaults to $GITHUB_TOKEN
     thresholds {
         yellowAfterMonths = 12  // months since last release before YELLOW
         redAfterMonths = 24     // months since last release before RED
@@ -152,11 +152,16 @@ All fields are optional. The values shown above are the defaults.
 
 `githubToken` is only needed if you're scanning enough dependencies to hit GitHub's
 unauthenticated rate limit (60 requests/hour). A token with no special scopes —
-just read access to public repos — is enough:
+just read access to public repos — is enough.
+
+If `githubToken` isn't set, the plugin uses the `GITHUB_TOKEN` environment variable
+when it's present and non-blank. In GitHub Actions, expose it to the step that runs
+Gradle (`env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}`) and no plugin config is
+needed. An explicit value always takes precedence:
 
 ```kotlin
 dependencyPulse {
-    githubToken = System.getenv("GITHUB_TOKEN") // or providers.gradleProperty("githubToken")
+    githubToken = providers.gradleProperty("githubToken")
 }
 ```
 
