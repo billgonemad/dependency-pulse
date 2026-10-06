@@ -75,7 +75,7 @@ class DependencyPulsePlugin : Plugin<Project> {
         task.redAfterMonths.set(ext.thresholds.redAfterMonths)
         task.githubToken.set(
             ext.githubToken.orElse(
-                project.providers.environmentVariable("GITHUB_TOKEN").filter { it.isNotBlank() },
+                project.providers.environmentVariable("GITHUB_TOKEN").map { it.takeIf(String::isNotBlank) },
             ),
         )
         task.githubRateLimitService.set(rateLimitService)
