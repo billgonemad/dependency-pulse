@@ -6,7 +6,7 @@
 
 # Windows script files: stored as committed, no conversion. Gradle generates
 # gradlew.bat with CRLF and Dependabot commits those bytes as-is.
-*.bat           -text
+*.bat           -text whitespace=cr-at-eol
 
 # Binary files should be left untouched
 *.jar           binary
