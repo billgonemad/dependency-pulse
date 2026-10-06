@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+      CVE-2026-53914 — unsafe deserialization in the Kotlin build-cache metadata
+      (CWE-502; CVSS:3.1 AV:L/AC:H/PR:H, i.e. local access + high privileges).
+      Fixed in Kotlin 2.4.20, which the plugin compiles against and ships.
+
+      Why suppressed:
+        - The shipped runtimeClasspath resolves kotlin-stdlib 2.4.20 and is not
+          flagged. The remaining findings are build-tool classpaths that pin
+          their own older Kotlin and never reach consumers:
+            - detekt (Detekt 1.23.8 runs only on Kotlin 2.0.21; no stable
+              Detekt 2.0 exists, and 2.0.0-alpha.6 is built on Kotlin 2.4.10)
+            - kotlinAbiValidationCompatClasspath (Kotlin Gradle plugin, 2.4.0)
+            - kotlin-reflect 1.6.10 on the Kotlin compiler classpaths (pinned
+              by JetBrains)
+        - The match is scoped to exactly those pinned versions, so a Kotlin
+          artifact at any other vulnerable version still fails the scan.
+
+      Tracking: issue #42. Remove once Detekt 2.0 ships stable on Kotlin >= 2.4.20
+      and the Kotlin Gradle plugin stops pinning 2.4.0 / kotlin-reflect 1.6.10.
+      The `until` date forces this finding to re-surface if forgotten.
+    -->
+    <suppress until="2027-01-05Z">
+        <notes><![CDATA[
+        Kotlin compiler build-cache deserialization (CWE-502) in build-tool-only
+        classpaths (detekt, Kotlin Gradle plugin internals). Shipped runtime
+        classpath is on fixed Kotlin 2.4.20.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.jetbrains\.kotlin/kotlin-[a-z0-9-]+@(1\.6\.10|1\.8\.0|2\.0\.21|2\.4\.0)$</packageUrl>
+        <cve>CVE-2026-53914</cve>
+    </suppress>
+</suppressions>
