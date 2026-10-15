@@ -194,6 +194,11 @@ both are set):
 ./gradlew dependencyPulse --summary-only
 ```
 
+Like Gradle's own report tasks, the report still prints under `--quiet` (`-q`),
+so `./gradlew -q dependencyPulse` shows just the report. A `failOnRed` or
+`failOnError` failure also names the offending dependencies (up to 10) in the
+build error itself.
+
 Setting both `summaryOnly` and `showGreen` (via the same source — both
 extension properties, or both CLI flags) is a configuration error and fails
 the build. Note there's no CLI flag to force plain `DEFAULT` output for a

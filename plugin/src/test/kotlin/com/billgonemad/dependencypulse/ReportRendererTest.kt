@@ -1,26 +1,12 @@
 package com.billgonemad.dependencypulse
 
-import java.io.ByteArrayOutputStream
-import java.io.PrintStream
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-class ReportPrinterTest {
-    private fun capture(block: () -> Unit): String {
-        val buf = ByteArrayOutputStream()
-        val old = System.out
-        System.setOut(PrintStream(buf))
-        try {
-            block()
-        } finally {
-            System.setOut(old)
-        }
-        return buf.toString()
-    }
-
+class ReportRendererTest {
     @Suppress("LongParameterList")
     private fun dep(
         group: String = "org.example",
@@ -46,7 +32,7 @@ class ReportPrinterTest {
     @Test fun `GREEN dep shows checkmark and Active`() {
         val now = Instant.now()
         val depList = listOf(dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN))
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("✅"))
         assertTrue(output.contains("Active"))
         assertTrue(output.contains("0 months ago"))
@@ -56,16 +42,14 @@ class ReportPrinterTest {
         val refNow = Instant.now()
         val old = refNow.minus(400, ChronoUnit.DAYS)
         val depList = listOf(dep(signals = MavenSignals("1.0", old), status = DepStatus.YELLOW))
-        val output = capture { ReportPrinter.print(depList, now = refNow) }
+        val output = ReportRenderer.render(depList, now = refNow)
         assertTrue(output.contains("⚠️"))
         assertTrue(output.contains("13 months ago"))
     }
 
     @Test fun `RED dep with null signals shows not-published message`() {
         val output =
-            capture {
-                ReportPrinter.print(listOf(dep(status = DepStatus.RED)))
-            }
+            ReportRenderer.render(listOf(dep(status = DepStatus.RED)))
         assertTrue(output.contains("🔴"))
         assertTrue(output.contains("no longer published"))
     }
@@ -79,7 +63,7 @@ class ReportPrinterTest {
                     status = DepStatus.GREEN,
                 ),
             )
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("Latest: unknown (repository metadata incomplete)"))
         assertFalse(output.contains("Latest: 8.14.4"))
         assertTrue(output.contains("6 months ago"))
@@ -87,9 +71,7 @@ class ReportPrinterTest {
 
     @Test fun `UNKNOWN dep shows question mark and unavailable message`() {
         val output =
-            capture {
-                ReportPrinter.print(listOf(dep(status = DepStatus.UNKNOWN, errorMessage = "timeout")))
-            }
+            ReportRenderer.render(listOf(dep(status = DepStatus.UNKNOWN, errorMessage = "timeout")))
         assertTrue(output.contains("❓"))
         assertTrue(output.contains("unavailable"))
     }
@@ -103,7 +85,7 @@ class ReportPrinterTest {
                 dep(status = DepStatus.RED),
                 dep(status = DepStatus.UNKNOWN, errorMessage = "err"),
             )
-        val output = capture { ReportPrinter.print(deps, now = Instant.now()) }
+        val output = ReportRenderer.render(deps, now = Instant.now())
         assertTrue(output.contains("4 dependencies scanned"))
         assertTrue(output.contains("1 red"))
         assertTrue(output.contains("1 yellow"))
@@ -121,7 +103,7 @@ class ReportPrinterTest {
                     knownStable = true,
                 ),
             )
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("📘"))
         assertTrue(output.contains("Spec (stable) | Latest: 3.0.0"))
         assertFalse(output.contains("🔴"))
@@ -129,7 +111,7 @@ class ReportPrinterTest {
 
     @Test fun `known-stable dep with no Maven signals still shows the UNKNOWN presentation`() {
         val depList = listOf(dep(status = DepStatus.UNKNOWN, errorMessage = "timeout", knownStable = true))
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertTrue(output.contains("❓"))
         assertTrue(output.contains("unavailable"))
         assertFalse(output.contains("📘"))
@@ -139,7 +121,7 @@ class ReportPrinterTest {
     @Test fun `known-stable GREEN dep still shows the Active suffix alongside the spec marker`() {
         val now = Instant.now()
         val depList = listOf(dep(signals = MavenSignals("3.0.0", now), status = DepStatus.GREEN, knownStable = true))
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("Spec (stable) | Latest: 3.0.0"))
         assertTrue(output.contains("| Active"))
     }
@@ -151,7 +133,7 @@ class ReportPrinterTest {
                 dep(signals = MavenSignals("3.0.0", now), status = DepStatus.GREEN, knownStable = true),
                 dep(status = DepStatus.RED),
             )
-        val output = capture { ReportPrinter.print(deps, now = now) }
+        val output = ReportRenderer.render(deps, now = now)
         assertTrue(output.contains("2 dependencies scanned"))
         assertTrue(output.contains("1 red"))
         assertTrue(output.contains("0 green"))
@@ -169,7 +151,7 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
                 ),
             )
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("🔴"))
         assertTrue(output.contains("GitHub: Repo archived"))
         assertFalse(output.contains("📘"))
@@ -185,7 +167,7 @@ class ReportPrinterTest {
                 dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN),
                 dep(status = DepStatus.RED),
             )
-        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.SUMMARY_ONLY) }
+        val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.SUMMARY_ONLY)
         assertFalse(output.contains("✅"))
         assertFalse(output.contains("🔴"))
         assertFalse(output.contains("Latest:"))
@@ -208,7 +190,7 @@ class ReportPrinterTest {
                 dep(status = DepStatus.RED),
                 dep(status = DepStatus.UNKNOWN, errorMessage = "timeout"),
             )
-        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.DEFAULT) }
+        val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
         assertFalse(output.contains("✅"))
         assertTrue(output.contains("📘"))
         assertTrue(output.contains("⚠️"))
@@ -225,7 +207,7 @@ class ReportPrinterTest {
     @Test fun `VERBOSE shows plain GREEN lines exactly like today's default`() {
         val now = Instant.now()
         val depList = listOf(dep(signals = MavenSignals("1.0", now), status = DepStatus.GREEN))
-        val output = capture { ReportPrinter.print(depList, now = now, outputLevel = OutputLevel.VERBOSE) }
+        val output = ReportRenderer.render(depList, now = now, outputLevel = OutputLevel.VERBOSE)
         assertTrue(output.contains("✅"))
         assertTrue(output.contains("Active"))
     }
@@ -238,7 +220,7 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
                 ),
             )
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertTrue(output.contains("GitHub: Repo archived"))
     }
 
@@ -252,25 +234,25 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.Found(lastCommitDate = old, isArchived = false),
                 ),
             )
-        val output = capture { ReportPrinter.print(depList, now = now) }
+        val output = ReportRenderer.render(depList, now = now)
         assertTrue(output.contains("GitHub: Last commit 14 months ago"))
     }
 
     @Test fun `NoRepo GitHub signal shows no GitHub line`() {
         val depList = listOf(dep(githubSignals = GitHubSignals.NoRepo))
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertFalse(output.contains("GitHub:"))
     }
 
     @Test fun `RateLimited GitHub signal shows a skipped message`() {
         val depList = listOf(dep(githubSignals = GitHubSignals.RateLimited))
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertTrue(output.contains("GitHub: check skipped (rate limited)"))
     }
 
     @Test fun `FetchFailed GitHub signal shows a skipped message`() {
         val depList = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertTrue(output.contains("GitHub: check skipped (fetch failed)"))
     }
 
@@ -281,13 +263,13 @@ class ReportPrinterTest {
                 dep(githubSignals = GitHubSignals.RateLimited),
                 dep(signals = MavenSignals("1.0", Instant.now()), status = DepStatus.GREEN),
             )
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertTrue(output.contains("2 GitHub checks skipped (2 rate limited)."))
     }
 
     @Test fun `summary line reports GitHub checks skipped due to fetch failures`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertTrue(output.contains("1 GitHub checks skipped (1 fetch failed)."))
     }
 
@@ -297,13 +279,13 @@ class ReportPrinterTest {
                 dep(githubSignals = GitHubSignals.RateLimited),
                 dep(githubSignals = GitHubSignals.FetchFailed),
             )
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertTrue(output.contains("2 GitHub checks skipped (1 rate limited, 1 fetch failed)."))
     }
 
     @Test fun `summary line reports GitHub repos found with no commit data`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertTrue(output.contains("1 GitHub repos found with no commit data available."))
     }
 
@@ -315,7 +297,7 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
                 ),
             )
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertFalse(output.contains("no commit data"))
     }
 
@@ -329,14 +311,14 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false),
                 ),
             )
-        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.DEFAULT) }
+        val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
         assertFalse(output.contains("GitHub: repo found, no commit data available"))
         assertTrue(output.contains("1 GitHub repos found with no commit data available."))
     }
 
     @Test fun `summary line omits skipped clause when no GitHub checks were skipped`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.NoRepo))
-        val output = capture { ReportPrinter.print(deps) }
+        val output = ReportRenderer.render(deps)
         assertFalse(output.contains("GitHub checks skipped"))
     }
 
@@ -350,7 +332,7 @@ class ReportPrinterTest {
                     githubSignals = GitHubSignals.RateLimited,
                 ),
             )
-        val output = capture { ReportPrinter.print(deps, now = now, outputLevel = OutputLevel.DEFAULT) }
+        val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
         assertFalse(output.contains("GitHub: check skipped"))
         assertTrue(output.contains("1 GitHub checks skipped (1 rate limited)."))
     }
@@ -358,7 +340,7 @@ class ReportPrinterTest {
     @Test fun `Found with null lastCommitDate and not archived shows a no-commit-data caveat`() {
         val depList =
             listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
-        val output = capture { ReportPrinter.print(depList) }
+        val output = ReportRenderer.render(depList)
         assertTrue(output.contains("GitHub: repo found, no commit data available"))
     }
 }

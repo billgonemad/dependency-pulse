@@ -47,6 +47,16 @@ internal fun DependencyInfo.isKnownStableWithSignals(): Boolean {
     return knownStable && mavenSignals != null && !archived
 }
 
+internal fun DependencyInfo.isUnexemptedRed(): Boolean = status == DepStatus.RED && !isKnownStableWithSignals()
+
+private const val MAX_LISTED_COORDINATES = 10
+
+internal fun List<DependencyInfo>.coordinateSummary(): String {
+    val listed = take(MAX_LISTED_COORDINATES).joinToString(", ") { "${it.group}:${it.artifact}:${it.currentVersion}" }
+    val remaining = size - MAX_LISTED_COORDINATES
+    return if (remaining > 0) "$listed and $remaining more" else listed
+}
+
 private const val DAYS_PER_MONTH = 30
 
 fun score(
