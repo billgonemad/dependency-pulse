@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/billgonemad/dependency-pulse/compare/v0.8.4...v0.9.0) (2026-10-15)
+
+
+### Features
+
+* default githubToken to the GITHUB_TOKEN environment variable ([#140](https://github.com/billgonemad/dependency-pulse/issues/140)) ([bf0319b](https://github.com/billgonemad/dependency-pulse/commit/bf0319bf5d124b55cfd59a882ce37f2002d3b5be))
+
+
+### Bug Fixes
+
+* **build:** compile the published plugin to Java 17 bytecode ([#142](https://github.com/billgonemad/dependency-pulse/issues/142)) ([67f52d8](https://github.com/billgonemad/dependency-pulse/commit/67f52d806fe55fd552dba3987fe75204840ee7d3))
+* log the report through Gradle's logger instead of println ([#143](https://github.com/billgonemad/dependency-pulse/issues/143)) ([0484341](https://github.com/billgonemad/dependency-pulse/commit/048434195198a188719bb831a59b3d9337186487)), closes [#91](https://github.com/billgonemad/dependency-pulse/issues/91)
+
 ## [0.8.4](https://github.com/billgonemad/dependency-pulse/compare/v0.8.3...v0.8.4) (2026-09-21)
 
 
