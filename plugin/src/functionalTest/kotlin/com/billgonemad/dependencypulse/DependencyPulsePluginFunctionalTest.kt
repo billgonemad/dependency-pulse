@@ -20,7 +20,6 @@ import kotlin.test.assertTrue
 
 class DependencyPulsePluginFunctionalTest {
     companion object {
-        private const val THREE_YEARS_MS = 3L * 365 * 24 * 3600 * 1000
         private const val HTTP_503 = 503
     }
 

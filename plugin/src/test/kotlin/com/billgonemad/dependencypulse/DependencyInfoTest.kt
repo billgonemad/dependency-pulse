@@ -115,4 +115,50 @@ class DependencyInfoTest {
             )
         assertTrue(info.isKnownStableWithSignals())
     }
+
+    private fun info(
+        artifact: String = "lib",
+        status: DepStatus = DepStatus.RED,
+        knownStable: Boolean = false,
+    ) = DependencyInfo(
+        group = "com.example",
+        artifact = artifact,
+        currentVersion = "1.0",
+        mavenSignals = MavenSignals("1.0", Instant.EPOCH),
+        githubSignals = GitHubSignals.NoRepo,
+        status = status,
+        errorMessage = null,
+        knownStable = knownStable,
+    )
+
+    @Test
+    fun `coordinateSummary lists every coordinate up to the limit`() {
+        val deps = listOf(info(artifact = "a"), info(artifact = "b"))
+        assertEquals("com.example:a:1.0, com.example:b:1.0", deps.coordinateSummary())
+    }
+
+    @Test
+    fun `coordinateSummary caps at ten coordinates and counts the rest`() {
+        val deps = (1..12).map { info(artifact = "lib$it") }
+        val summary = deps.coordinateSummary()
+        assertTrue(summary.startsWith("com.example:lib1:1.0, "), summary)
+        assertTrue(summary.contains("com.example:lib10:1.0"), summary)
+        assertFalse(summary.contains("com.example:lib11:1.0"), summary)
+        assertTrue(summary.endsWith(" and 2 more"), summary)
+    }
+
+    @Test
+    fun `isUnexemptedRed is true for a plain RED dependency`() {
+        assertTrue(info(status = DepStatus.RED).isUnexemptedRed())
+    }
+
+    @Test
+    fun `isUnexemptedRed is false for a known-stable RED dependency with Maven signals`() {
+        assertFalse(info(status = DepStatus.RED, knownStable = true).isUnexemptedRed())
+    }
+
+    @Test
+    fun `isUnexemptedRed is false for non-RED statuses`() {
+        assertFalse(info(status = DepStatus.YELLOW).isUnexemptedRed())
+    }
 }

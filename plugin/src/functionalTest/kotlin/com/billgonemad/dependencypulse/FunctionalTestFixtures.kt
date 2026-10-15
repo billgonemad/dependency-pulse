@@ -14,6 +14,8 @@ internal const val HTTP_404 = 404
 
 internal const val TAKE_REQUEST_TIMEOUT_SECONDS = 5L
 
+internal const val THREE_YEARS_MS = 3L * 365 * 24 * 3600 * 1000
+
 // Standard Maven layout: .../{group-with-slashes}/{artifactId}/{version}/{artifactId}-{version}.pom
 // — counting back from the end of the split path, version is 2nd-to-last, artifactId 3rd-to-last.
 private const val VERSION_SEGMENT_FROM_END = 2

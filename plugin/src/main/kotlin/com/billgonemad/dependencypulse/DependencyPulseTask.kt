@@ -105,15 +105,16 @@ abstract class DependencyPulseTask : DefaultTask() {
                 redAfterMonths.get(),
                 knownStableGroups.get(),
             )
-        ReportPrinter.print(results, outputLevel = outputLevel)
+        logger.quiet(ReportRenderer.render(results, outputLevel = outputLevel))
 
-        val hasUnexemptedRed = results.any { it.status == DepStatus.RED && !it.isKnownStableWithSignals() }
-        if (failOnRed.get() && hasUnexemptedRed) {
-            throw GradleException("dependency-pulse: one or more RED dependencies detected.")
+        val unexemptedRed = results.filter { it.isUnexemptedRed() }
+        if (failOnRed.get() && unexemptedRed.isNotEmpty()) {
+            throw GradleException("dependency-pulse: RED dependencies detected: ${unexemptedRed.coordinateSummary()}")
         }
-        if (failOnError.get() && results.any { it.status == DepStatus.UNKNOWN }) {
+        val unknown = results.filter { it.status == DepStatus.UNKNOWN }
+        if (failOnError.get() && unknown.isNotEmpty()) {
             throw GradleException(
-                "dependency-pulse: one or more dependencies could not be checked " +
+                "dependency-pulse: dependencies could not be checked: ${unknown.coordinateSummary()} " +
                     "(set failOnError=false to suppress).",
             )
         }
