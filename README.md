@@ -150,6 +150,11 @@ dependencyPulse {
 
 All fields are optional. The values shown above are the defaults.
 
+Assigning with `=` in a Kotlin DSL build script needs Gradle 8.2+. On older
+Gradle, use `.set(...)` instead, e.g. `failOnRed.set(true)` or
+`ignoreConfigurations.set(listOf(...))`. Groovy DSL `=` works on every supported
+version.
+
 `githubToken` is only needed if you're scanning enough dependencies to hit GitHub's
 unauthenticated rate limit (60 requests/hour). A token with no special scopes —
 just read access to public repos — is enough.
@@ -174,8 +179,10 @@ Run the task with:
 ### Which configurations are scanned
 
 The plugin scans every *resolvable* configuration in the project except those
-named in `ignoreConfigurations`. A dependency is reported once, even if several
-scanned configurations pull it in, and it's reported as long as any of them does.
+named in `ignoreConfigurations`. Each dependency version is reported once, even
+if several scanned configurations pull it in, and it's reported as long as any
+of them does. If two scanned configurations resolve different versions of the
+same module, each version is listed separately.
 
 The default list exists to keep test-only dependencies out of the report:
 
@@ -186,15 +193,14 @@ The default list exists to keep test-only dependencies out of the report:
   dependencies. They aren't resolvable, so they're never scanned anyway and
   listing them has no effect.
 
-Matching is by exact name, not prefix or pattern. Any resolvable configuration
-added by another plugin or a custom source set is scanned unless you name it.
-Common ones:
+Matching is by exact name, not prefix or pattern. Any other resolvable
+configuration is scanned unless you name it. Common ones:
 
 | Source | Configurations |
 |--------|----------------|
-| Spring Boot devtools | `developmentOnly`, `testAndDevelopmentOnly` |
+| Spring Boot Gradle plugin | `developmentOnly`, `testAndDevelopmentOnly` (Spring Boot 3.2+) |
 | A custom `integrationTest` source set or JVM test suite | `integrationTestCompileClasspath`, `integrationTestRuntimeClasspath`, `integrationTestAnnotationProcessor` |
-| Test annotation processors | `testAnnotationProcessor` |
+| Gradle's `java` plugin (test annotation processors) | `testAnnotationProcessor` |
 
 Setting `ignoreConfigurations` replaces the default list, so include the
 defaults you want to keep:
