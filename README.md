@@ -171,6 +171,51 @@ Run the task with:
 ./gradlew dependencyPulse
 ```
 
+### Which configurations are scanned
+
+The plugin scans every *resolvable* configuration in the project except those
+named in `ignoreConfigurations`. A dependency is reported once, even if several
+scanned configurations pull it in, and it's reported as long as any of them does.
+
+The default list exists to keep test-only dependencies out of the report:
+
+- `testCompileClasspath` and `testRuntimeClasspath` are the resolvable test
+  classpaths Gradle's `java`, `java-library` and `groovy` plugins create, so
+  these two are what actually exclude test dependencies.
+- `testImplementation` and `testRuntimeOnly` are where you *declare* test
+  dependencies. They aren't resolvable, so they're never scanned anyway and
+  listing them has no effect.
+
+Matching is by exact name, not prefix or pattern. Any resolvable configuration
+added by another plugin or a custom source set is scanned unless you name it.
+Common ones:
+
+| Source | Configurations |
+|--------|----------------|
+| Spring Boot devtools | `developmentOnly`, `testAndDevelopmentOnly` |
+| A custom `integrationTest` source set or JVM test suite | `integrationTestCompileClasspath`, `integrationTestRuntimeClasspath`, `integrationTestAnnotationProcessor` |
+| Test annotation processors | `testAnnotationProcessor` |
+
+Setting `ignoreConfigurations` replaces the default list, so include the
+defaults you want to keep:
+
+```kotlin
+dependencyPulse {
+    ignoreConfigurations = listOf(
+        "testImplementation",
+        "testRuntimeOnly",
+        "testCompileClasspath",
+        "testRuntimeClasspath",
+        "developmentOnly",
+        "integrationTestCompileClasspath",
+        "integrationTestRuntimeClasspath",
+    )
+}
+```
+
+To see every resolvable configuration in your project, run
+`./gradlew resolvableConfigurations` (Gradle 7.5+).
+
 ### Output verbosity
 
 By default, the report hides plain up-to-date (GREEN) dependency lines and
