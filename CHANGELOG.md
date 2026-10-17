@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.0](https://github.com/billgonemad/dependency-pulse/compare/v0.9.0...v0.10.0) (2026-10-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* Gradle 8.2 or newer is required. Gradle 7.6-8.1 is no longer supported, for Groovy DSL builds as well.
+
+### Bug Fixes
+
+* raise the minimum supported Gradle version to 8.2 ([#147](https://github.com/billgonemad/dependency-pulse/issues/147)) ([68bcfd7](https://github.com/billgonemad/dependency-pulse/commit/68bcfd7df5cf4930cb4bf3146a46730515669867))
+
 ## [0.9.0](https://github.com/billgonemad/dependency-pulse/compare/v0.8.4...v0.9.0) (2026-10-15)
 
 
