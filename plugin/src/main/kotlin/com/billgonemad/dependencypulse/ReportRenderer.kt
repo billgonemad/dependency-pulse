@@ -56,13 +56,13 @@ object ReportRenderer {
                 "$rateLimited rate limited".takeIf { rateLimited > 0 },
                 "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
             ).joinToString(", ")
-        appendLine("$skipped GitHub checks skipped ($reasons).")
+        appendLine("$skipped GitHub ${if (skipped == 1) "check" else "checks"} skipped ($reasons).")
     }
 
     private fun StringBuilder.appendGithubEmptyRepoLine(results: List<DependencyInfo>) {
         val emptyRepos = results.count { it.githubSignals == GitHubSignals.EmptyRepo }
         if (emptyRepos == 0) return
-        appendLine("$emptyRepos GitHub repos are empty.")
+        appendLine("$emptyRepos GitHub ${if (emptyRepos == 1) "repo is" else "repos are"} empty.")
     }
 
     private fun selectEmoji(
@@ -116,12 +116,11 @@ object ReportRenderer {
     ) {
         when (val signals = dep.githubSignals) {
             is GitHubSignals.Found -> {
-                val lastCommitDate = signals.lastCommitDate
-                if (signals.isArchived || lastCommitDate == null) {
-                    appendLine("   GitHub: Repo archived")
-                } else {
-                    appendLine("   GitHub: Last commit ${monthsAgo(lastCommitDate, now)} months ago")
-                }
+                appendLine("   GitHub: Last commit ${monthsAgo(signals.lastCommitDate, now)} months ago")
+            }
+
+            GitHubSignals.Archived -> {
+                appendLine("   GitHub: Repo archived")
             }
 
             GitHubSignals.EmptyRepo -> {

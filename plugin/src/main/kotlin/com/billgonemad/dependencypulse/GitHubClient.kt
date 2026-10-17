@@ -9,7 +9,7 @@ import java.time.Instant
 
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_CONFLICT = 409
-private const val EMPTY_REPOSITORY_MESSAGE = "Git Repository is empty."
+private const val EMPTY_REPOSITORY_KEYWORD = "empty"
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_MOVED_PERMANENTLY = 301
 private const val HTTP_FOUND = 302
@@ -44,6 +44,11 @@ private val RETRYABLE_CODES =
 internal interface RateLimitState {
     var limitedUntil: Instant?
 
+    fun isActive(): Boolean {
+        val until = limitedUntil
+        return until != null && Instant.now().isBefore(until)
+    }
+
     companion object {
         fun local(): RateLimitState =
             object : RateLimitState {
@@ -51,11 +56,6 @@ internal interface RateLimitState {
                 override var limitedUntil: Instant? = null
             }
     }
-}
-
-private fun RateLimitState.isActive(): Boolean {
-    val until = limitedUntil
-    return until != null && Instant.now().isBefore(until)
 }
 
 private sealed interface CommitLookup {
@@ -69,8 +69,12 @@ private sealed interface CommitLookup {
 }
 
 private fun isEmptyRepositoryMessage(body: String): Boolean =
-    runCatching { DEFAULT_JSON.decodeFromString<ErrorResponse>(body).message == EMPTY_REPOSITORY_MESSAGE }
-        .getOrDefault(false)
+    runCatching {
+        DEFAULT_JSON
+            .decodeFromString<ErrorResponse>(body)
+            .message
+            ?.contains(EMPTY_REPOSITORY_KEYWORD, ignoreCase = true) == true
+    }.getOrDefault(false)
 
 open class GitHubClient internal constructor(
     private val baseUrl: String = "https://api.github.com",
@@ -81,25 +85,13 @@ open class GitHubClient internal constructor(
 ) {
     open fun fetchSignals(ownerRepo: String): GitHubSignals {
         val repoInfo = fetchRepoInfo(ownerRepo) ?: return unavailable()
-        return when (val commits = fetchLastCommit(ownerRepo)) {
-            is CommitLookup.Dated -> {
-                GitHubSignals.Found(commits.date, repoInfo.archived)
-            }
-
-            CommitLookup.Empty -> {
-                if (repoInfo.archived) {
-                    GitHubSignals.Found(repoInfo.pushedAt, isArchived = true)
-                } else {
-                    GitHubSignals.EmptyRepo
-                }
-            }
-
-            CommitLookup.Failed -> {
-                if (repoInfo.pushedAt != null || repoInfo.archived) {
-                    GitHubSignals.Found(repoInfo.pushedAt, repoInfo.archived)
-                } else {
-                    unavailable()
-                }
+        return if (repoInfo.archived) {
+            GitHubSignals.Archived
+        } else {
+            when (val commits = fetchLastCommit(ownerRepo)) {
+                is CommitLookup.Dated -> GitHubSignals.Found(commits.date)
+                CommitLookup.Empty -> GitHubSignals.EmptyRepo
+                CommitLookup.Failed -> repoInfo.pushedAt?.let(GitHubSignals::Found) ?: unavailable()
             }
         }
     }

@@ -53,8 +53,8 @@ Dependency Pulse Report
    GitHub: repository is empty (no commits)
 =======================
 7 dependencies scanned. 1 red, 1 yellow, 3 green, 1 unknown, 1 stable.
-1 GitHub checks skipped (1 rate limited).
-1 GitHub repos are empty.
+1 GitHub check skipped (1 rate limited).
+1 GitHub repo is empty.
 ```
 
 ## Requirements
@@ -326,7 +326,7 @@ Central result and the GitHub result is worse wins:
   treating the repo's creation date as activity: the dependency's line
   prints `GitHub: repository is empty (no commits)` (when the line is
   shown), and the summary footer tallies it separately, e.g.
-  `1 GitHub repos are empty.` An empty repo that is archived is still
+  `1 GitHub repo is empty.` An empty repo that is archived is still
   reported as archived (🔴 Red).
 
 ### GitHub-verified candidate versions

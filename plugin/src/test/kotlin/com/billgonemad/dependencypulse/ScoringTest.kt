@@ -49,30 +49,30 @@ class ScoringTest {
 
     @Test fun `archived GitHub repo forces RED even when Maven is fresh`() {
         val signals = MavenSignals("1.0", now)
-        val github = GitHubSignals.Found(lastCommitDate = now, isArchived = true)
+        val github = GitHubSignals.Archived
         assertEquals(DepStatus.RED, score(signals, github, 12, 24))
     }
 
     @Test fun `archived GitHub repo forces RED even with no Maven signals`() {
-        val github = GitHubSignals.Found(lastCommitDate = now, isArchived = true)
+        val github = GitHubSignals.Archived
         assertEquals(DepStatus.RED, score(null, github, 12, 24))
     }
 
     @Test fun `stale GitHub commits downgrade a fresh Maven release to YELLOW`() {
         val signals = MavenSignals("1.0", now)
-        val github = GitHubSignals.Found(lastCommitDate = now.minus(390, ChronoUnit.DAYS), isArchived = false)
+        val github = GitHubSignals.Found(now.minus(390, ChronoUnit.DAYS))
         assertEquals(DepStatus.YELLOW, score(signals, github, 12, 24))
     }
 
     @Test fun `very stale GitHub commits downgrade a fresh Maven release to RED`() {
         val signals = MavenSignals("1.0", now)
-        val github = GitHubSignals.Found(lastCommitDate = now.minus(750, ChronoUnit.DAYS), isArchived = false)
+        val github = GitHubSignals.Found(now.minus(750, ChronoUnit.DAYS))
         assertEquals(DepStatus.RED, score(signals, github, 12, 24))
     }
 
     @Test fun `fresh GitHub commits do not downgrade a fresh Maven release`() {
         val signals = MavenSignals("1.0", now)
-        val github = GitHubSignals.Found(lastCommitDate = now, isArchived = false)
+        val github = GitHubSignals.Found(now)
         assertEquals(DepStatus.GREEN, score(signals, github, 12, 24))
     }
 
@@ -101,7 +101,7 @@ class ScoringTest {
     }
 
     @Test fun `worst-of wins - a fresh GitHub commit does not improve a RED Maven status`() {
-        val github = GitHubSignals.Found(lastCommitDate = now, isArchived = false)
+        val github = GitHubSignals.Found(now)
         assertEquals(DepStatus.RED, score(null, github, 12, 24))
     }
 

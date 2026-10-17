@@ -19,13 +19,10 @@ data class MavenSignals(
 
 sealed class GitHubSignals {
     data class Found(
-        val lastCommitDate: Instant?,
-        val isArchived: Boolean,
-    ) : GitHubSignals() {
-        init {
-            require(lastCommitDate != null || isArchived) { "A non-archived repo must have a last commit date" }
-        }
-    }
+        val lastCommitDate: Instant,
+    ) : GitHubSignals()
+
+    object Archived : GitHubSignals()
 
     object EmptyRepo : GitHubSignals()
 
@@ -48,10 +45,8 @@ data class DependencyInfo(
     val knownStable: Boolean = false,
 )
 
-internal fun DependencyInfo.isKnownStableWithSignals(): Boolean {
-    val archived = (githubSignals as? GitHubSignals.Found)?.isArchived == true
-    return knownStable && mavenSignals != null && !archived
-}
+internal fun DependencyInfo.isKnownStableWithSignals(): Boolean =
+    knownStable && mavenSignals != null && githubSignals != GitHubSignals.Archived
 
 internal fun DependencyInfo.isUnexemptedRed(): Boolean = status == DepStatus.RED && !isKnownStableWithSignals()
 
@@ -121,12 +116,11 @@ internal fun githubStatus(
 ): DepStatus =
     when (signals) {
         is GitHubSignals.Found -> {
-            val lastCommitDate = signals.lastCommitDate
-            if (signals.isArchived || lastCommitDate == null) {
-                DepStatus.RED
-            } else {
-                monthsStatus(lastCommitDate, yellowMonths, redMonths)
-            }
+            monthsStatus(signals.lastCommitDate, yellowMonths, redMonths)
+        }
+
+        GitHubSignals.Archived -> {
+            DepStatus.RED
         }
 
         GitHubSignals.EmptyRepo,

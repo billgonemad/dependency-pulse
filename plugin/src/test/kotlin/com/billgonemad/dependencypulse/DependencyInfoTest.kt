@@ -3,7 +3,6 @@ package com.billgonemad.dependencypulse
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -11,7 +10,7 @@ class DependencyInfoTest {
     @Test
     fun `DependencyInfo holds all fields`() {
         val maven = MavenSignals("2.0", Instant.EPOCH)
-        val github = GitHubSignals.Found(Instant.EPOCH, false)
+        val github = GitHubSignals.Found(Instant.EPOCH)
         val info =
             DependencyInfo(
                 group = "com.example",
@@ -30,20 +29,6 @@ class DependencyInfoTest {
         assertFalse(info.javaxBlocker)
         assertEquals(DepStatus.GREEN, info.status)
         assertEquals(null, info.errorMessage)
-    }
-
-    @Test
-    fun `GitHubSignals Found archived flag is stored`() {
-        val signals = GitHubSignals.Found(Instant.EPOCH, isArchived = true)
-        assertEquals(Instant.EPOCH, signals.lastCommitDate)
-        assertEquals(true, signals.isArchived)
-    }
-
-    @Test
-    fun `GitHubSignals Found allows a null lastCommitDate`() {
-        val signals = GitHubSignals.Found(lastCommitDate = null, isArchived = true)
-        assertEquals(null, signals.lastCommitDate)
-        assertEquals(true, signals.isArchived)
     }
 
     private fun dependencyInfo(
@@ -101,7 +86,7 @@ class DependencyInfoTest {
             dependencyInfo(
                 knownStable = true,
                 mavenSignals = MavenSignals("1.0", Instant.EPOCH),
-                githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+                githubSignals = GitHubSignals.Archived,
             )
         assertFalse(info.isKnownStableWithSignals())
     }
@@ -115,13 +100,6 @@ class DependencyInfoTest {
                 githubSignals = GitHubSignals.EmptyRepo,
             )
         assertTrue(info.isKnownStableWithSignals())
-    }
-
-    @Test
-    fun `a found repo that is not archived must carry a last commit date`() {
-        assertFailsWith<IllegalArgumentException> {
-            GitHubSignals.Found(lastCommitDate = null, isArchived = false)
-        }
     }
 
     private fun info(

@@ -148,7 +148,7 @@ class ReportRendererTest {
                     signals = MavenSignals("3.0.0", now.minus(60, ChronoUnit.DAYS)),
                     status = DepStatus.RED,
                     knownStable = true,
-                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+                    githubSignals = GitHubSignals.Archived,
                 ),
             )
         val output = ReportRenderer.render(depList, now = now)
@@ -217,7 +217,7 @@ class ReportRendererTest {
             listOf(
                 dep(
                     status = DepStatus.RED,
-                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
+                    githubSignals = GitHubSignals.Archived,
                 ),
             )
         val output = ReportRenderer.render(depList)
@@ -231,7 +231,7 @@ class ReportRendererTest {
             listOf(
                 dep(
                     status = DepStatus.YELLOW,
-                    githubSignals = GitHubSignals.Found(lastCommitDate = old, isArchived = false),
+                    githubSignals = GitHubSignals.Found(old),
                 ),
             )
         val output = ReportRenderer.render(depList, now = now)
@@ -270,7 +270,7 @@ class ReportRendererTest {
     @Test fun `summary line reports GitHub checks skipped due to fetch failures`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.FetchFailed))
         val output = ReportRenderer.render(deps)
-        assertTrue(output.contains("1 GitHub checks skipped (1 fetch failed)."))
+        assertTrue(output.contains("1 GitHub check skipped (1 fetch failed)."))
     }
 
     @Test fun `summary line combines rate-limited and fetch-failed skip counts`() {
@@ -286,13 +286,19 @@ class ReportRendererTest {
     @Test fun `summary line reports empty GitHub repos`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.EmptyRepo))
         val output = ReportRenderer.render(deps)
-        assertTrue(output.contains("1 GitHub repos are empty."))
+        assertTrue(output.contains("1 GitHub repo is empty."))
+    }
+
+    @Test fun `summary line pluralises the empty-repo count`() {
+        val deps = listOf(dep(githubSignals = GitHubSignals.EmptyRepo), dep(githubSignals = GitHubSignals.EmptyRepo))
+        val output = ReportRenderer.render(deps)
+        assertTrue(output.contains("2 GitHub repos are empty."))
     }
 
     @Test fun `summary line omits the empty-repo clause when no GitHub repo is empty`() {
-        val deps = listOf(dep(githubSignals = GitHubSignals.Found(Instant.now(), isArchived = false)))
+        val deps = listOf(dep(githubSignals = GitHubSignals.Found(Instant.now())))
         val output = ReportRenderer.render(deps)
-        assertFalse(output.contains("are empty"))
+        assertFalse(output.contains("empty"))
     }
 
     @Test fun `DEFAULT mode hides the empty-repo row for a plain-GREEN dep but keeps the summary count`() {
@@ -307,13 +313,13 @@ class ReportRendererTest {
             )
         val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
         assertFalse(output.contains("GitHub: repository is empty"))
-        assertTrue(output.contains("1 GitHub repos are empty."))
+        assertTrue(output.contains("1 GitHub repo is empty."))
     }
 
     @Test fun `summary line omits skipped clause when no GitHub checks were skipped`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.NoRepo))
         val output = ReportRenderer.render(deps)
-        assertFalse(output.contains("GitHub checks skipped"))
+        assertFalse(output.contains("skipped"))
     }
 
     @Test fun `DEFAULT mode hides the skipped row for a plain-GREEN dep but keeps the summary count`() {
@@ -328,7 +334,7 @@ class ReportRendererTest {
             )
         val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
         assertFalse(output.contains("GitHub: check skipped"))
-        assertTrue(output.contains("1 GitHub checks skipped (1 rate limited)."))
+        assertTrue(output.contains("1 GitHub check skipped (1 rate limited)."))
     }
 
     @Test fun `EmptyRepo GitHub signal shows an empty-repository line`() {

@@ -131,7 +131,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `populates githubSignals when the dependency has a resolvable GitHub repo`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val analyzer =
             analyzerWith(
                 greenSignals,
@@ -155,7 +155,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `folds in an archived GitHub repo when the Maven lookup is unresolvable`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = true)
+        val githubSignals = GitHubSignals.Archived
         val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient("org/bad"), stubGithubClient(githubSignals))
 
         val results =
@@ -174,7 +174,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("gradle/gradle"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v9.7.1")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v9.7.1")),
             )
 
         val results =
@@ -196,7 +196,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("gradle/gradle"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v9.7.1")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v9.7.1")),
             )
 
         val results =
@@ -226,7 +226,7 @@ class DependencyAnalyzerTest {
         var releaseCallCount = 0
         val githubClient =
             object : GitHubClient() {
-                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now, isArchived = false)
+                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now)
 
                 override fun fetchRecentReleaseTags(
                     ownerRepo: String,
@@ -255,7 +255,7 @@ class DependencyAnalyzerTest {
         var releaseCallCount = 0
         val githubClient =
             object : GitHubClient() {
-                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now, isArchived = false)
+                override fun fetchSignals(ownerRepo: String) = GitHubSignals.Found(now)
 
                 override fun fetchRecentReleaseTags(
                     ownerRepo: String,
@@ -286,7 +286,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("org/widget"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v2.0.0")),
             )
 
         analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
@@ -313,7 +313,7 @@ class DependencyAnalyzerTest {
                 // so this proves the freshest verified candidate wins regardless of list position,
                 // not whichever tag happens to resolve first.
                 stubGithubClientWithReleases(
-                    GitHubSignals.Found(now, isArchived = false),
+                    GitHubSignals.Found(now),
                     listOf("v1.5.0", "v2.0.0"),
                 ),
             )
@@ -332,7 +332,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("org/widget"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v1.5.0")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v1.5.0")),
             )
 
         val results =
@@ -353,7 +353,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("org/widget"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0-RC1")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v2.0.0-RC1")),
             )
 
         analyzer.analyze(setOf(Coords("org.example", "widget", "1.0.0")), singleRepoUrls, 12, 24, emptyList())
@@ -389,7 +389,7 @@ class DependencyAnalyzerTest {
             DependencyAnalyzer(
                 client,
                 stubPomClient("org/widget"),
-                stubGithubClientWithReleases(GitHubSignals.Found(now, isArchived = false), listOf("v2.0.0")),
+                stubGithubClientWithReleases(GitHubSignals.Found(now), listOf("v2.0.0")),
             )
 
         val results =
@@ -734,7 +734,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `keeps walking the github repo lookup past a repo whose POM is not found`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val calledBaseUrls = mutableListOf<String>()
         val pomClient =
             object : PomClient() {
@@ -817,7 +817,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `stays UNKNOWN when the Maven lookup is unresolvable and GitHub has no worse signal`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient("org/bad"), stubGithubClient(githubSignals))
 
         val results =
@@ -827,7 +827,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `climbs to the parent POM when the child has no scm link`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val childCoord = Coords("org.example", "child", "1.0")
         val parentCoord = Coords("org.example", "child-parent", "2.0")
         val pomClient =
@@ -852,7 +852,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `climbs through two parent hops to find the scm link at the grandparent`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val childCoord = Coords("org.example", "child", "1.0")
         val parentCoord = Coords("org.example", "mid-parent", "1.0")
         val grandparentCoord = Coords("org.example", "top-parent", "1.0")
@@ -935,7 +935,7 @@ class DependencyAnalyzerTest {
     }
 
     @Test fun `continues to the next declared repo when the github repo lookup throws`() {
-        val githubSignals = GitHubSignals.Found(now, isArchived = false)
+        val githubSignals = GitHubSignals.Found(now)
         val calledBaseUrls = mutableListOf<String>()
         val pomClient =
             object : PomClient() {
