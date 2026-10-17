@@ -60,7 +60,7 @@ Dependency Pulse Report
 ## Requirements
 
 - Java 17+
-- Gradle 7.6+
+- Gradle 8.2+
 - Compatible with Gradle's [configuration cache](https://docs.gradle.org/current/userguide/configuration_cache.html) (`--configuration-cache`) — previously a hard failure with no workaround
 
 ## Installation
@@ -150,11 +150,6 @@ dependencyPulse {
 
 All fields are optional. The values shown above are the defaults.
 
-Assigning with `=` in a Kotlin DSL build script needs Gradle 8.2+. On older
-Gradle, use `.set(...)` instead, e.g. `failOnRed.set(true)` or
-`ignoreConfigurations.set(listOf(...))`. Groovy DSL `=` works on every supported
-version.
-
 `githubToken` is only needed if you're scanning enough dependencies to hit GitHub's
 unauthenticated rate limit (60 requests/hour). A token with no special scopes —
 just read access to public repos — is enough.
@@ -220,7 +215,7 @@ dependencyPulse {
 ```
 
 To see every resolvable configuration in your project, run
-`./gradlew resolvableConfigurations` (Gradle 7.5+).
+`./gradlew resolvableConfigurations`.
 
 ### Output verbosity
 
