@@ -47,8 +47,13 @@ class KotlinDslFunctionalTest {
                 compileOnly("org.slf4j:slf4j-api:2.0.16")
             }
             dependencyPulse {
-                pomBaseUrl.set("http://${server.hostName}:${server.port}")
-                githubApiBaseUrl.set("http://${server.hostName}:${server.port}")
+                pomBaseUrl = "http://${server.hostName}:${server.port}"
+                githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+                showGreen = true
+                ignoreConfigurations = listOf("testCompileClasspath", "testRuntimeClasspath")
+                thresholds {
+                    yellowAfterMonths = 12
+                }
             }
             """.trimIndent(),
         )
@@ -59,10 +64,12 @@ class KotlinDslFunctionalTest {
                 .withProjectDir(projectDir)
                 .withPluginClasspath()
                 .withCompatGradleVersion()
-                .withArguments("dependencyPulse", "--show-green")
+                .withArguments("dependencyPulse")
                 .build()
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
+        assertTrue(result.output.contains("dependencies scanned"))
     }
 }
