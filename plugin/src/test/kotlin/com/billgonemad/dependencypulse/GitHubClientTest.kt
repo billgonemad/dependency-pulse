@@ -17,6 +17,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+private const val EMPTY_REPO_BODY =
+    """{"message":"Git Repository is empty.","status":"409"}"""
+
 class GitHubClientTest {
     private lateinit var server: MockWebServer
     private lateinit var client: GitHubClient
@@ -124,7 +127,7 @@ class GitHubClientTest {
         assertNull(server.takeRequest().getHeader("Authorization"))
     }
 
-    @Test fun `falls back to repo pushed_at when the commits endpoint has no commits`() {
+    @Test fun `falls back to repo pushed_at when the commits endpoint fails`() {
         server.enqueue(
             MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
         )
@@ -134,6 +137,74 @@ class GitHubClientTest {
 
         assertIs<GitHubSignals.Found>(result)
         assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
+    }
+
+    @Test fun `reports an empty repo instead of falling back to pushed_at`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(409).setBody(EMPTY_REPO_BODY))
+
+        assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `reports an empty repo when the commits endpoint returns an empty list`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setBody("[]"))
+
+        assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `treats a 409 without the empty-repository message as a commits failure`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(409).setBody("""{"message":"Conflict"}"""))
+
+        val result = client.fetchSignals("owner/repo")
+
+        assertIs<GitHubSignals.Found>(result)
+        assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
+    }
+
+    @Test fun `keeps reporting an empty archived repo as archived`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":true,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setResponseCode(409).setBody(EMPTY_REPO_BODY))
+
+        assertEquals(
+            GitHubSignals.Found(Instant.parse("2024-01-15T10:00:00Z"), isArchived = true),
+            client.fetchSignals("owner/repo"),
+        )
+    }
+
+    @Test fun `returns FetchFailed when the commits endpoint fails and the repo has no pushed_at`() {
+        server.enqueue(MockResponse().setBody("""{"archived":false,"pushed_at":null}"""))
+        server.enqueue(MockResponse().setResponseCode(404))
+
+        assertEquals(GitHubSignals.FetchFailed, client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `returns RateLimited when the commits endpoint is rate limited and the repo has no pushed_at`() {
+        server.enqueue(MockResponse().setBody("""{"archived":false}"""))
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(403)
+                .addHeader("X-RateLimit-Remaining", "0")
+                .addHeader(
+                    "X-RateLimit-Reset",
+                    Instant
+                        .now()
+                        .plusSeconds(3600)
+                        .epochSecond
+                        .toString(),
+                ),
+        )
+
+        assertEquals(GitHubSignals.RateLimited, client.fetchSignals("owner/repo"))
     }
 
     @Test fun `returns FetchFailed when the repo is not found`() {

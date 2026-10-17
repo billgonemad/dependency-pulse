@@ -3,6 +3,7 @@ package com.billgonemad.dependencypulse
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -106,14 +107,21 @@ class DependencyInfoTest {
     }
 
     @Test
-    fun `isKnownStableWithSignals is true when github repo found but not archived`() {
+    fun `isKnownStableWithSignals is true when github repo is empty`() {
         val info =
             dependencyInfo(
                 knownStable = true,
                 mavenSignals = MavenSignals("1.0", Instant.EPOCH),
-                githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false),
+                githubSignals = GitHubSignals.EmptyRepo,
             )
         assertTrue(info.isKnownStableWithSignals())
+    }
+
+    @Test
+    fun `a found repo that is not archived must carry a last commit date`() {
+        assertFailsWith<IllegalArgumentException> {
+            GitHubSignals.Found(lastCommitDate = null, isArchived = false)
+        }
     }
 
     private fun info(

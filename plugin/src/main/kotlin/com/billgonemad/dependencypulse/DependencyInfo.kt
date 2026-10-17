@@ -21,7 +21,13 @@ sealed class GitHubSignals {
     data class Found(
         val lastCommitDate: Instant?,
         val isArchived: Boolean,
-    ) : GitHubSignals()
+    ) : GitHubSignals() {
+        init {
+            require(lastCommitDate != null || isArchived) { "A non-archived repo must have a last commit date" }
+        }
+    }
+
+    object EmptyRepo : GitHubSignals()
 
     object NoRepo : GitHubSignals()
 
@@ -115,14 +121,19 @@ internal fun githubStatus(
 ): DepStatus =
     when (signals) {
         is GitHubSignals.Found -> {
-            when {
-                signals.isArchived -> DepStatus.RED
-                signals.lastCommitDate == null -> DepStatus.GREEN
-                else -> monthsStatus(signals.lastCommitDate, yellowMonths, redMonths)
+            val lastCommitDate = signals.lastCommitDate
+            if (signals.isArchived || lastCommitDate == null) {
+                DepStatus.RED
+            } else {
+                monthsStatus(lastCommitDate, yellowMonths, redMonths)
             }
         }
 
-        GitHubSignals.NoRepo, GitHubSignals.RateLimited, GitHubSignals.FetchFailed -> {
+        GitHubSignals.EmptyRepo,
+        GitHubSignals.NoRepo,
+        GitHubSignals.RateLimited,
+        GitHubSignals.FetchFailed,
+        -> {
             DepStatus.GREEN
         }
     }

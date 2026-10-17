@@ -91,10 +91,13 @@ class ScoringTest {
         assertEquals(DepStatus.GREEN, score(signals, GitHubSignals.FetchFailed, 12, 24))
     }
 
-    @Test fun `Found with null lastCommitDate and not archived does not change Maven-derived status`() {
+    @Test fun `EmptyRepo GitHub signal does not change Maven-derived status`() {
         val signals = MavenSignals("1.0", now)
-        val github = GitHubSignals.Found(lastCommitDate = null, isArchived = false)
-        assertEquals(DepStatus.GREEN, score(signals, github, 12, 24))
+        assertEquals(DepStatus.GREEN, score(signals, GitHubSignals.EmptyRepo, 12, 24))
+    }
+
+    @Test fun `EmptyRepo GitHub signal leaves an unresolvable Maven lookup UNKNOWN`() {
+        assertEquals(DepStatus.UNKNOWN, unresolvableStatus(GitHubSignals.EmptyRepo, 12, 24))
     }
 
     @Test fun `worst-of wins - a fresh GitHub commit does not improve a RED Maven status`() {

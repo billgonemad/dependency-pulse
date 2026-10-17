@@ -283,37 +283,31 @@ class ReportRendererTest {
         assertTrue(output.contains("2 GitHub checks skipped (1 rate limited, 1 fetch failed)."))
     }
 
-    @Test fun `summary line reports GitHub repos found with no commit data`() {
-        val deps = listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
+    @Test fun `summary line reports empty GitHub repos`() {
+        val deps = listOf(dep(githubSignals = GitHubSignals.EmptyRepo))
         val output = ReportRenderer.render(deps)
-        assertTrue(output.contains("1 GitHub repos found with no commit data available."))
+        assertTrue(output.contains("1 GitHub repos are empty."))
     }
 
-    @Test fun `summary line does not count an archived repo with null commit date as no-commit-data`() {
-        val deps =
-            listOf(
-                dep(
-                    status = DepStatus.RED,
-                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = true),
-                ),
-            )
+    @Test fun `summary line omits the empty-repo clause when no GitHub repo is empty`() {
+        val deps = listOf(dep(githubSignals = GitHubSignals.Found(Instant.now(), isArchived = false)))
         val output = ReportRenderer.render(deps)
-        assertFalse(output.contains("no commit data"))
+        assertFalse(output.contains("are empty"))
     }
 
-    @Test fun `DEFAULT mode hides the no-commit-data row for a plain-GREEN dep but keeps the summary count`() {
+    @Test fun `DEFAULT mode hides the empty-repo row for a plain-GREEN dep but keeps the summary count`() {
         val now = Instant.now()
         val deps =
             listOf(
                 dep(
                     signals = MavenSignals("1.0", now),
                     status = DepStatus.GREEN,
-                    githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false),
+                    githubSignals = GitHubSignals.EmptyRepo,
                 ),
             )
         val output = ReportRenderer.render(deps, now = now, outputLevel = OutputLevel.DEFAULT)
-        assertFalse(output.contains("GitHub: repo found, no commit data available"))
-        assertTrue(output.contains("1 GitHub repos found with no commit data available."))
+        assertFalse(output.contains("GitHub: repository is empty"))
+        assertTrue(output.contains("1 GitHub repos are empty."))
     }
 
     @Test fun `summary line omits skipped clause when no GitHub checks were skipped`() {
@@ -337,10 +331,8 @@ class ReportRendererTest {
         assertTrue(output.contains("1 GitHub checks skipped (1 rate limited)."))
     }
 
-    @Test fun `Found with null lastCommitDate and not archived shows a no-commit-data caveat`() {
-        val depList =
-            listOf(dep(githubSignals = GitHubSignals.Found(lastCommitDate = null, isArchived = false)))
-        val output = ReportRenderer.render(depList)
-        assertTrue(output.contains("GitHub: repo found, no commit data available"))
+    @Test fun `EmptyRepo GitHub signal shows an empty-repository line`() {
+        val output = ReportRenderer.render(listOf(dep(githubSignals = GitHubSignals.EmptyRepo)))
+        assertTrue(output.contains("GitHub: repository is empty (no commits)"))
     }
 }
