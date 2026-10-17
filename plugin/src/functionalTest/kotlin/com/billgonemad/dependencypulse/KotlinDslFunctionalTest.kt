@@ -1,0 +1,68 @@
+package com.billgonemad.dependencypulse
+
+import okhttp3.mockwebserver.MockWebServer
+import org.gradle.testkit.runner.GradleRunner
+import org.gradle.testkit.runner.TaskOutcome
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.io.TempDir
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class KotlinDslFunctionalTest {
+    @field:TempDir
+    lateinit var projectDir: File
+
+    private lateinit var server: MockWebServer
+
+    @BeforeEach
+    fun setUp() {
+        server = MockWebServer()
+        server.dispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis())
+        server.start()
+    }
+
+    @AfterEach
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    @Test fun `plugin applies and runs from a Kotlin DSL build script`() {
+        projectDir.resolve("settings.gradle.kts").writeText("""rootProject.name = "test-project"""")
+        projectDir.resolve("build.gradle.kts").writeText(
+            """
+            plugins {
+                `java-library`
+                id("com.billgonemad.dependency-pulse")
+            }
+            repositories {
+                maven {
+                    url = uri("http://${server.hostName}:${server.port}")
+                    isAllowInsecureProtocol = true
+                }
+            }
+            dependencies {
+                compileOnly("org.slf4j:slf4j-api:2.0.16")
+            }
+            dependencyPulse {
+                pomBaseUrl.set("http://${server.hostName}:${server.port}")
+                githubApiBaseUrl.set("http://${server.hostName}:${server.port}")
+            }
+            """.trimIndent(),
+        )
+
+        val result =
+            GradleRunner
+                .create()
+                .withProjectDir(projectDir)
+                .withPluginClasspath()
+                .withCompatGradleVersion()
+                .withArguments("dependencyPulse", "--show-green")
+                .build()
+
+        assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
+        assertTrue(result.output.contains("slf4j-api"))
+    }
+}

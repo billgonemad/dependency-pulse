@@ -13,7 +13,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - gradle-version: '7.6.4'
+          - gradle-version: '8.2.1'
             java-version: '17'
           - gradle-version: '8.10.2'
             java-version: '21'
