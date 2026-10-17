@@ -50,11 +50,11 @@ Dependency Pulse Report
    GitHub: check skipped (rate limited)
 ✅ net.example:steady-io:1.4.2
    Latest: 1.4.2 | Released: 4 months ago | Active
-   GitHub: repo found, no commit data available
+   GitHub: repository is empty (no commits)
 =======================
 7 dependencies scanned. 1 red, 1 yellow, 3 green, 1 unknown, 1 stable.
-1 GitHub checks skipped (1 rate limited).
-1 GitHub repos found with no commit data available.
+1 GitHub check skipped (1 rate limited).
+1 GitHub repo is empty.
 ```
 
 ## Requirements
@@ -316,16 +316,18 @@ Central result and the GitHub result is worse wins:
   is shown — see [Output verbosity](#output-verbosity)), and the summary
   footer tallies the total across the run, e.g.
   `2 GitHub checks skipped (1 rate limited, 1 fetch failed).`
-- If a repo *was* resolved and its archived status *was* confirmed, but the
-  commit-date lookup came back empty, the dependency's status is still
-  unaffected — it's scored on Maven Central data alone, same as the other
-  unresolved-GitHub cases above. This is a different situation from "never
-  checked" (rate-limited/fetch-failed) or "no repo linked" (no resolvable
-  repo), so it gets its own line and its own counter rather than folding
-  into the "GitHub checks skipped" tally: the dependency's line prints
-  `GitHub: repo found, no commit data available` (when the line is shown),
-  and the summary footer tallies it separately, e.g.
-  `1 GitHub repos found with no commit data available.`
+- If the commits lookup fails, the repo's `pushed_at` date stands in for the
+  last commit; if the repo has no `pushed_at` either, it counts as a failed
+  lookup (above).
+- If a repo *was* resolved but GitHub reports it has no commits at all, the
+  dependency's status is still unaffected — it's scored on Maven Central
+  data alone. An empty repo usually means the POM's `<scm>` link is stale
+  or points at a placeholder, so the report calls it out instead of
+  treating the repo's creation date as activity: the dependency's line
+  prints `GitHub: repository is empty (no commits)` (when the line is
+  shown), and the summary footer tallies it separately, e.g.
+  `1 GitHub repo is empty.` An empty repo that is archived is still
+  reported as archived (🔴 Red).
 
 ### GitHub-verified candidate versions
 

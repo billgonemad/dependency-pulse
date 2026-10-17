@@ -43,7 +43,7 @@ object ReportRenderer {
                     "$unknown unknown, $stable stable.",
             )
             appendGithubSkippedLine(results)
-            appendGithubNoCommitDataLine(results)
+            appendGithubEmptyRepoLine(results)
         }.removeSuffix("\n")
 
     private fun StringBuilder.appendGithubSkippedLine(results: List<DependencyInfo>) {
@@ -56,17 +56,13 @@ object ReportRenderer {
                 "$rateLimited rate limited".takeIf { rateLimited > 0 },
                 "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
             ).joinToString(", ")
-        appendLine("$skipped GitHub checks skipped ($reasons).")
+        appendLine("$skipped GitHub ${if (skipped == 1) "check" else "checks"} skipped ($reasons).")
     }
 
-    private fun StringBuilder.appendGithubNoCommitDataLine(results: List<DependencyInfo>) {
-        val noCommitData =
-            results.count {
-                val signals = it.githubSignals
-                signals is GitHubSignals.Found && signals.lastCommitDate == null && !signals.isArchived
-            }
-        if (noCommitData == 0) return
-        appendLine("$noCommitData GitHub repos found with no commit data available.")
+    private fun StringBuilder.appendGithubEmptyRepoLine(results: List<DependencyInfo>) {
+        val emptyRepos = results.count { it.githubSignals == GitHubSignals.EmptyRepo }
+        if (emptyRepos == 0) return
+        appendLine("$emptyRepos GitHub ${if (emptyRepos == 1) "repo is" else "repos are"} empty.")
     }
 
     private fun selectEmoji(
@@ -120,20 +116,15 @@ object ReportRenderer {
     ) {
         when (val signals = dep.githubSignals) {
             is GitHubSignals.Found -> {
-                when {
-                    signals.isArchived -> {
-                        appendLine("   GitHub: Repo archived")
-                    }
+                appendLine("   GitHub: Last commit ${monthsAgo(signals.lastCommitDate, now)} months ago")
+            }
 
-                    signals.lastCommitDate != null -> {
-                        val months = monthsAgo(signals.lastCommitDate, now)
-                        appendLine("   GitHub: Last commit $months months ago")
-                    }
+            GitHubSignals.Archived -> {
+                appendLine("   GitHub: Repo archived")
+            }
 
-                    else -> {
-                        appendLine("   GitHub: repo found, no commit data available")
-                    }
-                }
+            GitHubSignals.EmptyRepo -> {
+                appendLine("   GitHub: repository is empty (no commits)")
             }
 
             GitHubSignals.RateLimited -> {
