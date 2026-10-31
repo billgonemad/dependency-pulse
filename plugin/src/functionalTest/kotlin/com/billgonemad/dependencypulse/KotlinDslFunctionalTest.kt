@@ -70,6 +70,6 @@ class KotlinDslFunctionalTest {
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
-        assertTrue(result.output.contains("dependencies scanned"))
+        assertTrue(result.output.contains("1 dependency scanned."), result.output)
     }
 }

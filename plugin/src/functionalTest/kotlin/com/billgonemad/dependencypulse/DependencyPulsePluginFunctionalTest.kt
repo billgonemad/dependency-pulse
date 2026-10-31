@@ -76,7 +76,7 @@ class DependencyPulsePluginFunctionalTest {
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("Dependency Pulse Report"))
         assertTrue(result.output.contains("slf4j-api"))
-        assertTrue(result.output.contains("dependencies scanned"))
+        assertTrue(result.output.contains("1 dependency scanned."), result.output)
     }
 
     @Test fun `Maven and GitHub requests are routed to their own configured base URLs`() {
@@ -367,7 +367,7 @@ class DependencyPulsePluginFunctionalTest {
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(!result.output.contains("slf4j-api"))
-        assertTrue(result.output.contains("dependencies scanned"))
+        assertTrue(result.output.contains("1 dependency scanned."), result.output)
     }
 
     @Test fun `failOnError causes build failure when Maven Central returns an error`() {

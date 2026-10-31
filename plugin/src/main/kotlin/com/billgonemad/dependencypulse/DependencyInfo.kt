@@ -19,9 +19,12 @@ data class MavenSignals(
 
 sealed class GitHubSignals {
     data class Found(
-        val lastCommitDate: Instant?,
-        val isArchived: Boolean,
+        val lastCommitDate: Instant,
     ) : GitHubSignals()
+
+    object Archived : GitHubSignals()
+
+    object EmptyRepo : GitHubSignals()
 
     object NoRepo : GitHubSignals()
 
@@ -42,10 +45,8 @@ data class DependencyInfo(
     val knownStable: Boolean = false,
 )
 
-internal fun DependencyInfo.isKnownStableWithSignals(): Boolean {
-    val archived = (githubSignals as? GitHubSignals.Found)?.isArchived == true
-    return knownStable && mavenSignals != null && !archived
-}
+internal fun DependencyInfo.isKnownStableWithSignals(): Boolean =
+    knownStable && mavenSignals != null && githubSignals != GitHubSignals.Archived
 
 internal fun DependencyInfo.isUnexemptedRed(): Boolean = status == DepStatus.RED && !isKnownStableWithSignals()
 
@@ -115,14 +116,18 @@ internal fun githubStatus(
 ): DepStatus =
     when (signals) {
         is GitHubSignals.Found -> {
-            when {
-                signals.isArchived -> DepStatus.RED
-                signals.lastCommitDate == null -> DepStatus.GREEN
-                else -> monthsStatus(signals.lastCommitDate, yellowMonths, redMonths)
-            }
+            monthsStatus(signals.lastCommitDate, yellowMonths, redMonths)
         }
 
-        GitHubSignals.NoRepo, GitHubSignals.RateLimited, GitHubSignals.FetchFailed -> {
+        GitHubSignals.Archived -> {
+            DepStatus.RED
+        }
+
+        GitHubSignals.EmptyRepo,
+        GitHubSignals.NoRepo,
+        GitHubSignals.RateLimited,
+        GitHubSignals.FetchFailed,
+        -> {
             DepStatus.GREEN
         }
     }

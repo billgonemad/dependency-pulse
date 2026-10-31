@@ -8,6 +8,7 @@ import java.net.http.HttpResponse
 import java.time.Instant
 
 private const val HTTP_FORBIDDEN = 403
+private const val HTTP_CONFLICT = 409
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_MOVED_PERMANENTLY = 301
 private const val HTTP_FOUND = 302
@@ -42,6 +43,11 @@ private val RETRYABLE_CODES =
 internal interface RateLimitState {
     var limitedUntil: Instant?
 
+    fun isActive(): Boolean {
+        val until = limitedUntil
+        return until != null && Instant.now().isBefore(until)
+    }
+
     companion object {
         fun local(): RateLimitState =
             object : RateLimitState {
@@ -49,6 +55,16 @@ internal interface RateLimitState {
                 override var limitedUntil: Instant? = null
             }
     }
+}
+
+private sealed interface CommitLookup {
+    data class Dated(
+        val date: Instant,
+    ) : CommitLookup
+
+    object Empty : CommitLookup
+
+    object Failed : CommitLookup
 }
 
 open class GitHubClient internal constructor(
@@ -59,26 +75,37 @@ open class GitHubClient internal constructor(
     private val rateLimitState: RateLimitState = RateLimitState.local(),
 ) {
     open fun fetchSignals(ownerRepo: String): GitHubSignals {
-        val repoInfo =
-            fetchRepoInfo(ownerRepo)
-                ?: return if (isRateLimited()) GitHubSignals.RateLimited else GitHubSignals.FetchFailed
-        val lastCommitDate = fetchLastCommitDate(ownerRepo) ?: repoInfo.pushedAt
-        return GitHubSignals.Found(lastCommitDate, repoInfo.archived)
+        val repoInfo = fetchRepoInfo(ownerRepo) ?: return unavailable()
+        return if (repoInfo.archived) {
+            GitHubSignals.Archived
+        } else {
+            when (val commits = fetchLastCommit(ownerRepo)) {
+                is CommitLookup.Dated -> GitHubSignals.Found(commits.date)
+                CommitLookup.Empty -> GitHubSignals.EmptyRepo
+                CommitLookup.Failed -> repoInfo.pushedAt?.let(GitHubSignals::Found) ?: unavailable()
+            }
+        }
     }
 
-    private fun isRateLimited(): Boolean {
-        val limitedUntil = rateLimitState.limitedUntil
-        return limitedUntil != null && Instant.now().isBefore(limitedUntil)
-    }
+    private fun unavailable(): GitHubSignals =
+        if (rateLimitState.isActive()) {
+            GitHubSignals.RateLimited
+        } else {
+            GitHubSignals.FetchFailed
+        }
 
     private fun fetchRepoInfo(ownerRepo: String): RepoInfo? {
         val response = get("$baseUrl/repos/$ownerRepo") ?: return null
         return if (response.statusCode() == HTTP_OK) decodeRepoInfo(response.body()) else null
     }
 
-    private fun fetchLastCommitDate(ownerRepo: String): Instant? {
-        val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1") ?: return null
-        return if (response.statusCode() == HTTP_OK) decodeLastCommitDate(response.body()) else null
+    private fun fetchLastCommit(ownerRepo: String): CommitLookup {
+        val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1") ?: return CommitLookup.Failed
+        return when (response.statusCode()) {
+            HTTP_OK -> decodeLastCommit(response.body())
+            HTTP_CONFLICT -> CommitLookup.Empty
+            else -> CommitLookup.Failed
+        }
     }
 
     open fun fetchRecentReleaseTags(
@@ -103,7 +130,7 @@ open class GitHubClient internal constructor(
     }
 
     private fun get(url: String): HttpResponse<String>? {
-        if (isRateLimited()) return null
+        if (rateLimitState.isActive()) return null
         var attempt = 0
         var result: HttpResponse<String>? = null
         while (true) {
@@ -187,7 +214,7 @@ open class GitHubClient internal constructor(
             null
         }
 
-    private fun decodeLastCommitDate(body: String): Instant? =
+    private fun decodeLastCommit(body: String): CommitLookup =
         try {
             DEFAULT_JSON
                 .decodeFromString<List<CommitResponse>>(body)
@@ -195,11 +222,11 @@ open class GitHubClient internal constructor(
                 ?.commit
                 ?.committer
                 ?.date
-                ?.let(Instant::parse)
+                ?.let { CommitLookup.Dated(Instant.parse(it)) } ?: CommitLookup.Failed
         } catch (
             @Suppress("TooGenericExceptionCaught") ignored: Exception,
         ) {
-            null
+            CommitLookup.Failed
         }
 }
 

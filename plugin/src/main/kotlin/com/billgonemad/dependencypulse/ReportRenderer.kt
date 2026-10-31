@@ -38,12 +38,13 @@ object ReportRenderer {
             val red = results.count { it.isUnexemptedRed() }
             val unknown = results.count { it.status == DepStatus.UNKNOWN && !it.isKnownStableWithSignals() }
             val stable = results.count { it.isKnownStableWithSignals() }
+            val scanned = plural(results.size, "dependency", "dependencies")
             appendLine(
-                "${results.size} dependencies scanned. $red red, $yellow yellow, $green green, " +
+                "$scanned scanned. $red red, $yellow yellow, $green green, " +
                     "$unknown unknown, $stable stable.",
             )
             appendGithubSkippedLine(results)
-            appendGithubNoCommitDataLine(results)
+            appendGithubEmptyRepoLine(results)
         }.removeSuffix("\n")
 
     private fun StringBuilder.appendGithubSkippedLine(results: List<DependencyInfo>) {
@@ -56,17 +57,13 @@ object ReportRenderer {
                 "$rateLimited rate limited".takeIf { rateLimited > 0 },
                 "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
             ).joinToString(", ")
-        appendLine("$skipped GitHub checks skipped ($reasons).")
+        appendLine("${plural(skipped, "GitHub check", "GitHub checks")} skipped ($reasons).")
     }
 
-    private fun StringBuilder.appendGithubNoCommitDataLine(results: List<DependencyInfo>) {
-        val noCommitData =
-            results.count {
-                val signals = it.githubSignals
-                signals is GitHubSignals.Found && signals.lastCommitDate == null && !signals.isArchived
-            }
-        if (noCommitData == 0) return
-        appendLine("$noCommitData GitHub repos found with no commit data available.")
+    private fun StringBuilder.appendGithubEmptyRepoLine(results: List<DependencyInfo>) {
+        val emptyRepos = results.count { it.githubSignals == GitHubSignals.EmptyRepo }
+        if (emptyRepos == 0) return
+        appendLine("${plural(emptyRepos, "GitHub repo is", "GitHub repos are")} empty.")
     }
 
     private fun selectEmoji(
@@ -101,12 +98,12 @@ object ReportRenderer {
             else -> {
                 val signals = dep.mavenSignals
                 if (signals != null) {
-                    val months = monthsAgo(signals.latestReleaseDate, now)
+                    val released = plural(monthsAgo(signals.latestReleaseDate, now), "month", "months")
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
                     val stablePrefix = if (isStable) "Spec (stable) | " else ""
                     val latestLabel =
                         if (signals.verified) signals.latestVersion else "unknown (repository metadata incomplete)"
-                    appendLine("   ${stablePrefix}Latest: $latestLabel | Released: $months months ago$active")
+                    appendLine("   ${stablePrefix}Latest: $latestLabel | Released: $released ago$active")
                 } else {
                     appendLine("   No Maven Central data available")
                 }
@@ -120,20 +117,16 @@ object ReportRenderer {
     ) {
         when (val signals = dep.githubSignals) {
             is GitHubSignals.Found -> {
-                when {
-                    signals.isArchived -> {
-                        appendLine("   GitHub: Repo archived")
-                    }
+                val lastCommit = plural(monthsAgo(signals.lastCommitDate, now), "month", "months")
+                appendLine("   GitHub: Last commit $lastCommit ago")
+            }
 
-                    signals.lastCommitDate != null -> {
-                        val months = monthsAgo(signals.lastCommitDate, now)
-                        appendLine("   GitHub: Last commit $months months ago")
-                    }
+            GitHubSignals.Archived -> {
+                appendLine("   GitHub: Repo archived")
+            }
 
-                    else -> {
-                        appendLine("   GitHub: repo found, no commit data available")
-                    }
-                }
+            GitHubSignals.EmptyRepo -> {
+                appendLine("   GitHub: repository is empty (no commits)")
             }
 
             GitHubSignals.RateLimited -> {
@@ -152,4 +145,10 @@ object ReportRenderer {
         date: Instant,
         now: Instant,
     ): Int = (ChronoUnit.DAYS.between(date, now) / DAYS_PER_MONTH).toInt()
+
+    private fun plural(
+        count: Int,
+        one: String,
+        many: String,
+    ): String = "$count ${if (count == 1) one else many}"
 }
