@@ -38,8 +38,9 @@ object ReportRenderer {
             val red = results.count { it.isUnexemptedRed() }
             val unknown = results.count { it.status == DepStatus.UNKNOWN && !it.isKnownStableWithSignals() }
             val stable = results.count { it.isKnownStableWithSignals() }
+            val scanned = plural(results.size, "dependency", "dependencies")
             appendLine(
-                "${results.size} dependencies scanned. $red red, $yellow yellow, $green green, " +
+                "$scanned scanned. $red red, $yellow yellow, $green green, " +
                     "$unknown unknown, $stable stable.",
             )
             appendGithubSkippedLine(results)
@@ -56,13 +57,13 @@ object ReportRenderer {
                 "$rateLimited rate limited".takeIf { rateLimited > 0 },
                 "$fetchFailed fetch failed".takeIf { fetchFailed > 0 },
             ).joinToString(", ")
-        appendLine("$skipped GitHub ${if (skipped == 1) "check" else "checks"} skipped ($reasons).")
+        appendLine("${plural(skipped, "GitHub check", "GitHub checks")} skipped ($reasons).")
     }
 
     private fun StringBuilder.appendGithubEmptyRepoLine(results: List<DependencyInfo>) {
         val emptyRepos = results.count { it.githubSignals == GitHubSignals.EmptyRepo }
         if (emptyRepos == 0) return
-        appendLine("$emptyRepos GitHub ${if (emptyRepos == 1) "repo is" else "repos are"} empty.")
+        appendLine("${plural(emptyRepos, "GitHub repo is", "GitHub repos are")} empty.")
     }
 
     private fun selectEmoji(
@@ -97,12 +98,12 @@ object ReportRenderer {
             else -> {
                 val signals = dep.mavenSignals
                 if (signals != null) {
-                    val months = monthsAgo(signals.latestReleaseDate, now)
+                    val released = plural(monthsAgo(signals.latestReleaseDate, now), "month", "months")
                     val active = if (dep.status == DepStatus.GREEN) " | Active" else ""
                     val stablePrefix = if (isStable) "Spec (stable) | " else ""
                     val latestLabel =
                         if (signals.verified) signals.latestVersion else "unknown (repository metadata incomplete)"
-                    appendLine("   ${stablePrefix}Latest: $latestLabel | Released: $months months ago$active")
+                    appendLine("   ${stablePrefix}Latest: $latestLabel | Released: $released ago$active")
                 } else {
                     appendLine("   No Maven Central data available")
                 }
@@ -116,7 +117,8 @@ object ReportRenderer {
     ) {
         when (val signals = dep.githubSignals) {
             is GitHubSignals.Found -> {
-                appendLine("   GitHub: Last commit ${monthsAgo(signals.lastCommitDate, now)} months ago")
+                val lastCommit = plural(monthsAgo(signals.lastCommitDate, now), "month", "months")
+                appendLine("   GitHub: Last commit $lastCommit ago")
             }
 
             GitHubSignals.Archived -> {
@@ -143,4 +145,10 @@ object ReportRenderer {
         date: Instant,
         now: Instant,
     ): Int = (ChronoUnit.DAYS.between(date, now) / DAYS_PER_MONTH).toInt()
+
+    private fun plural(
+        count: Int,
+        one: String,
+        many: String,
+    ): String = "$count ${if (count == 1) one else many}"
 }

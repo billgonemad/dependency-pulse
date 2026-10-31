@@ -128,34 +128,49 @@ class GitHubClientTest {
         assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
     }
 
-    @Test fun `reports an empty repo when the commits endpoint returns an empty list`() {
-        server.enqueue(
-            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
-        )
-        server.enqueue(MockResponse().setBody("[]"))
-
-        assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
-    }
-
-    @Test fun `treats a 409 without the empty-repository message as a commits failure`() {
+    @Test fun `reports an empty repo for a 409 whatever its message`() {
         server.enqueue(
             MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
         )
         server.enqueue(MockResponse().setResponseCode(409).setBody("""{"message":"Conflict"}"""))
 
-        val result = client.fetchSignals("owner/repo")
-
-        assertIs<GitHubSignals.Found>(result)
-        assertEquals(Instant.parse("2024-01-15T10:00:00Z"), result.lastCommitDate)
+        assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
     }
 
-    @Test fun `recognises the empty-repository message regardless of case and punctuation`() {
+    @Test fun `reports an empty repo for a 409 with a non-json body`() {
         server.enqueue(
             MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
         )
-        server.enqueue(MockResponse().setResponseCode(409).setBody("""{"message":"Git repository is EMPTY"}"""))
+        server.enqueue(MockResponse().setResponseCode(409).setBody("<html>Conflict</html>"))
 
         assertEquals(GitHubSignals.EmptyRepo, client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `falls back to repo pushed_at when the commits endpoint returns an empty list`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setBody("[]"))
+
+        assertEquals(GitHubSignals.Found(Instant.parse("2024-01-15T10:00:00Z")), client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `falls back to repo pushed_at when the last commit has no committer date`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setBody("""[{"commit":{"committer":{}}}]"""))
+
+        assertEquals(GitHubSignals.Found(Instant.parse("2024-01-15T10:00:00Z")), client.fetchSignals("owner/repo"))
+    }
+
+    @Test fun `falls back to repo pushed_at when the commits body is malformed`() {
+        server.enqueue(
+            MockResponse().setBody("""{"archived":false,"pushed_at":"2024-01-15T10:00:00Z"}"""),
+        )
+        server.enqueue(MockResponse().setBody("not json"))
+
+        assertEquals(GitHubSignals.Found(Instant.parse("2024-01-15T10:00:00Z")), client.fetchSignals("owner/repo"))
     }
 
     @Test fun `returns FetchFailed when the commits endpoint fails and the repo has no pushed_at`() {

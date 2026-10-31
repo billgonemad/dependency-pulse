@@ -72,7 +72,7 @@ class ReportLoggingFunctionalTest {
 
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("Dependency Pulse Report"), result.output)
-        assertTrue(result.output.contains("1 dependencies scanned."), result.output)
+        assertTrue(result.output.contains("1 dependency scanned."), result.output)
     }
 
     @Test fun `failOnRed failure under --quiet names the RED dependency`() {

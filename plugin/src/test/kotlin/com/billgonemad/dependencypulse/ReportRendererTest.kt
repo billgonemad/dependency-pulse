@@ -298,7 +298,7 @@ class ReportRendererTest {
     @Test fun `summary line omits the empty-repo clause when no GitHub repo is empty`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.Found(Instant.now())))
         val output = ReportRenderer.render(deps)
-        assertFalse(output.contains("empty"))
+        assertFalse(output.contains("GitHub repo"))
     }
 
     @Test fun `DEFAULT mode hides the empty-repo row for a plain-GREEN dep but keeps the summary count`() {
@@ -319,7 +319,27 @@ class ReportRendererTest {
     @Test fun `summary line omits skipped clause when no GitHub checks were skipped`() {
         val deps = listOf(dep(githubSignals = GitHubSignals.NoRepo))
         val output = ReportRenderer.render(deps)
-        assertFalse(output.contains("skipped"))
+        assertFalse(output.contains("GitHub check"))
+    }
+
+    @Test fun `summary line uses the singular for one dependency`() {
+        val output = ReportRenderer.render(listOf(dep()))
+        assertTrue(output.contains("1 dependency scanned."), output)
+    }
+
+    @Test fun `release age uses the singular for one month`() {
+        val now = Instant.now()
+        val released = now.minus(40, ChronoUnit.DAYS)
+        val output = ReportRenderer.render(listOf(dep(signals = MavenSignals("1.0", released))), now = now)
+        assertTrue(output.contains("Released: 1 month ago"), output)
+    }
+
+    @Test fun `last commit age uses the singular for one month`() {
+        val now = Instant.now()
+        val committed = now.minus(40, ChronoUnit.DAYS)
+        val deps = listOf(dep(status = DepStatus.YELLOW, githubSignals = GitHubSignals.Found(committed)))
+        val output = ReportRenderer.render(deps, now = now)
+        assertTrue(output.contains("GitHub: Last commit 1 month ago"), output)
     }
 
     @Test fun `DEFAULT mode hides the skipped row for a plain-GREEN dep but keeps the summary count`() {

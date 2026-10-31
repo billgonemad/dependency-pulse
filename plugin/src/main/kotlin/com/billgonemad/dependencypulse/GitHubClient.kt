@@ -9,7 +9,6 @@ import java.time.Instant
 
 private const val HTTP_FORBIDDEN = 403
 private const val HTTP_CONFLICT = 409
-private const val EMPTY_REPOSITORY_KEYWORD = "empty"
 private const val HTTP_TOO_MANY_REQUESTS = 429
 private const val HTTP_MOVED_PERMANENTLY = 301
 private const val HTTP_FOUND = 302
@@ -68,14 +67,6 @@ private sealed interface CommitLookup {
     object Failed : CommitLookup
 }
 
-private fun isEmptyRepositoryMessage(body: String): Boolean =
-    runCatching {
-        DEFAULT_JSON
-            .decodeFromString<ErrorResponse>(body)
-            .message
-            ?.contains(EMPTY_REPOSITORY_KEYWORD, ignoreCase = true) == true
-    }.getOrDefault(false)
-
 open class GitHubClient internal constructor(
     private val baseUrl: String = "https://api.github.com",
     private val httpClient: HttpClient = HttpClientProvider.githubHttpClient,
@@ -112,7 +103,7 @@ open class GitHubClient internal constructor(
         val response = get("$baseUrl/repos/$ownerRepo/commits?per_page=1") ?: return CommitLookup.Failed
         return when (response.statusCode()) {
             HTTP_OK -> decodeLastCommit(response.body())
-            HTTP_CONFLICT -> if (isEmptyRepositoryMessage(response.body())) CommitLookup.Empty else CommitLookup.Failed
+            HTTP_CONFLICT -> CommitLookup.Empty
             else -> CommitLookup.Failed
         }
     }
@@ -225,17 +216,13 @@ open class GitHubClient internal constructor(
 
     private fun decodeLastCommit(body: String): CommitLookup =
         try {
-            val commits = DEFAULT_JSON.decodeFromString<List<CommitResponse>>(body)
-            if (commits.isEmpty()) {
-                CommitLookup.Empty
-            } else {
-                commits
-                    .first()
-                    .commit
-                    ?.committer
-                    ?.date
-                    ?.let { CommitLookup.Dated(Instant.parse(it)) } ?: CommitLookup.Failed
-            }
+            DEFAULT_JSON
+                .decodeFromString<List<CommitResponse>>(body)
+                .firstOrNull()
+                ?.commit
+                ?.committer
+                ?.date
+                ?.let { CommitLookup.Dated(Instant.parse(it)) } ?: CommitLookup.Failed
         } catch (
             @Suppress("TooGenericExceptionCaught") ignored: Exception,
         ) {
@@ -252,11 +239,6 @@ private data class RepoInfo(
 private data class RepoResponse(
     val archived: Boolean = false,
     @SerialName("pushed_at") val pushedAt: String? = null,
-)
-
-@Serializable
-private data class ErrorResponse(
-    val message: String? = null,
 )
 
 @Serializable
