@@ -5,6 +5,9 @@ import java.time.temporal.ChronoUnit
 
 private const val DAYS_PER_MONTH = 30
 
+private const val NOT_FOUND_DETAIL =
+    "   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)"
+
 object ReportRenderer {
     // Defaults to VERBOSE (every dependency) so unit tests that exercise line formatting
     // don't need to opt in to green lines. The one production caller
@@ -88,9 +91,7 @@ object ReportRenderer {
     ) {
         when {
             dep.notPublished -> {
-                appendLine(
-                    "   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)",
-                )
+                appendLine(NOT_FOUND_DETAIL)
             }
 
             dep.status == DepStatus.UNKNOWN -> {

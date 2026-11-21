@@ -272,8 +272,8 @@ For each resolved dependency — including BOM/platform components resolved via
 `implementation platform(...)`, since a stale BOM is valuable signal (it can
 pin old versions for everything under it), but excluding `project()` (local
 multi-module) dependencies, which aren't published Maven coordinates — the
-plugin queries Maven Central first for the artifact's version metadata and
-latest release date. Central (`pomBaseUrl`) is always checked first. If that
+plugin queries Maven Central (`pomBaseUrl`) first for the artifact's version
+metadata and latest release date. If that
 result isn't healthy (not Green), it walks every Maven-type repository with an
 http(s) URL declared in the project's own `repositories {}` (`mavenCentral()`,
 `google()`, `maven { url = ... }`), in the order they're declared, stopping at
@@ -288,7 +288,7 @@ require credentials *are* walked like any other, but the plugin doesn't send
 any credentials (authenticated-repository support isn't implemented yet,
 tracked as a follow-up), so a private repository will typically fail with an
 authentication error rather than being silently skipped. A dependency found
-in none of the walked repositories is reported Unknown, not Red. It then classifies
+in none of the walked repositories is reported Unknown, not Red. The plugin then classifies
 the dependency:
 
 | Status | Condition |
@@ -296,7 +296,7 @@ the dependency:
 | ✅ Green | Last release < 12 months ago |
 | ⚠️ Yellow | Last release 12–24 months ago |
 | 🔴 Red | Last release > 24 months ago, GitHub last commit past the red threshold, or GitHub repo archived |
-| ❓ Unknown | A declared repository couldn't be reached, or the artifact was not found in any walked repository (a stale or archived GitHub repo can still raise it to Yellow or Red), and no repository ever returned data for the artifact |
+| ❓ Unknown | A declared repository couldn't be reached and no repository returned data, or the artifact was not found in any walked repository. A stale or archived GitHub repo can still raise it to Yellow or Red. |
 | 📘 Spec (stable) | Matches `knownStableGroups` and real Maven data exists — shown instead of the status above, regardless of age |
 
 Thresholds are configurable. Test configurations are excluded by default.

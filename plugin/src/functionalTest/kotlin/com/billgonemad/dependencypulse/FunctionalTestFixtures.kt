@@ -6,6 +6,7 @@ import okhttp3.mockwebserver.MockWebServer
 import okhttp3.mockwebserver.RecordedRequest
 import okio.Buffer
 import org.gradle.testkit.runner.GradleRunner
+import java.io.File
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -159,3 +160,16 @@ internal fun GradleRunner.withCompatGradleVersion(): GradleRunner {
     val version = System.getProperty("testGradleVersion")?.takeIf { it.isNotBlank() }
     return if (version != null) withGradleVersion(version) else this
 }
+
+internal fun notFoundDispatcher(): Dispatcher =
+    object : Dispatcher() {
+        override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
+    }
+
+internal fun File.runner(vararg arguments: String): GradleRunner =
+    GradleRunner
+        .create()
+        .withProjectDir(this)
+        .withPluginClasspath()
+        .withCompatGradleVersion()
+        .withArguments(*arguments)
