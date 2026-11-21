@@ -87,12 +87,14 @@ object ReportRenderer {
         isStable: Boolean,
     ) {
         when {
-            dep.status == DepStatus.UNKNOWN -> {
-                appendLine("   Maven Central unavailable — skipped (set failOnError=true to fail the build)")
+            dep.notPublished -> {
+                appendLine(
+                    "   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)",
+                )
             }
 
-            dep.status == DepStatus.RED && dep.mavenSignals == null -> {
-                appendLine("   Artifact no longer published to Maven Central")
+            dep.status == DepStatus.UNKNOWN -> {
+                appendLine("   Maven Central unavailable — skipped (set failOnError=true to fail the build)")
             }
 
             else -> {

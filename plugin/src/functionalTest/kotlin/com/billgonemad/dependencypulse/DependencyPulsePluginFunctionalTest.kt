@@ -634,6 +634,7 @@ class DependencyPulsePluginFunctionalTest {
             assertTrue(result.output.contains("1 unknown, 0 stable"), result.output)
             assertFalse(result.output.contains("🔴"), result.output)
             assertFalse(result.output.contains("no longer published"), result.output)
+            assertTrue(result.output.contains("Not found in any repository dependencyPulse checked"), result.output)
         }
     }
 
@@ -680,6 +681,7 @@ class DependencyPulsePluginFunctionalTest {
             val result = runner("dependencyPulse").buildAndFail()
 
             assertTrue(result.output.contains("🔴"), result.output)
+            assertFalse(result.output.contains("no longer published"), result.output)
         }
     }
 
@@ -690,6 +692,7 @@ class DependencyPulsePluginFunctionalTest {
             assertTrue(result.output.contains("❓"), result.output)
             assertTrue(result.output.contains("1 unknown"), result.output)
             assertFalse(result.output.contains("🔴"), result.output)
+            assertTrue(result.output.contains("Not found in any repository dependencyPulse checked"), result.output)
         }
     }
 
@@ -699,6 +702,7 @@ class DependencyPulsePluginFunctionalTest {
 
             assertTrue(result.output.contains("could not be checked: org.slf4j:slf4j-api:2.0.16"), result.output)
             assertTrue(result.output.contains("❓"), result.output)
+            assertTrue(result.output.contains("Not found in any repository dependencyPulse checked"), result.output)
         }
     }
 

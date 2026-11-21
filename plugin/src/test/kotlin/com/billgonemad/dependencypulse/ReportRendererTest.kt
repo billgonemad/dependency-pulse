@@ -17,6 +17,7 @@ class ReportRendererTest {
         errorMessage: String? = null,
         githubSignals: GitHubSignals = GitHubSignals.NoRepo,
         knownStable: Boolean = false,
+        notPublished: Boolean = false,
     ) = DependencyInfo(
         group = group,
         artifact = artifact,
@@ -27,6 +28,7 @@ class ReportRendererTest {
         status = status,
         errorMessage = errorMessage,
         knownStable = knownStable,
+        notPublished = notPublished,
     )
 
     @Test fun `GREEN dep shows checkmark and Active`() {
@@ -47,11 +49,30 @@ class ReportRendererTest {
         assertTrue(output.contains("13 months ago"))
     }
 
-    @Test fun `RED dep with null signals shows not-published message`() {
+    @Test fun `notPublished UNKNOWN dep shows not-found-in-walked-repos line`() {
+        val output = ReportRenderer.render(listOf(dep(status = DepStatus.UNKNOWN, notPublished = true)))
+        assertTrue(
+            output.contains(
+                "   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)",
+            ),
+        )
+    }
+
+    @Test fun `unreachable UNKNOWN dep keeps unavailable line`() {
+        val output = ReportRenderer.render(listOf(dep(status = DepStatus.UNKNOWN)))
+        assertTrue(
+            output.contains("   Maven Central unavailable — skipped (set failOnError=true to fail the build)"),
+        )
+    }
+
+    @Test fun `RED dep with no Maven signals does not claim artifact is unpublished`() {
         val output =
-            ReportRenderer.render(listOf(dep(status = DepStatus.RED)))
+            ReportRenderer.render(
+                listOf(dep(status = DepStatus.RED, githubSignals = GitHubSignals.Archived)),
+            )
         assertTrue(output.contains("🔴"))
-        assertTrue(output.contains("no longer published"))
+        assertFalse(output.contains("no longer published"))
+        assertTrue(output.contains("   No Maven Central data available"))
     }
 
     @Test fun `unverified signals print the honest fallback label instead of the raw version`() {
