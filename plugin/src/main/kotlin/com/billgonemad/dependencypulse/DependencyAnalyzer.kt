@@ -73,9 +73,10 @@ internal class DependencyAnalyzer(
                     mavenSignals = null,
                     githubSignals = githubSignals,
                     javaxBlocker = false,
-                    status = score(null, githubSignals, yellowAfterMonths, redAfterMonths),
+                    status = unresolvableStatus(githubSignals, yellowAfterMonths, redAfterMonths),
                     errorMessage = null,
                     knownStable = knownStable,
+                    notPublished = true,
                 )
             }
 

@@ -420,6 +420,7 @@ class DependencyPulsePluginFunctionalTest {
                     ).buildAndFail()
 
             assertTrue(result.output.contains("❓"))
+            assertTrue(result.output.contains("Maven Central unavailable"), result.output)
         }
     }
 
@@ -601,17 +602,9 @@ class DependencyPulsePluginFunctionalTest {
         assertTrue(result.output.contains("Spec (stable)"))
     }
 
-    @Test fun `failOnRed still fails when a knownStableGroups match has no Maven data`() {
-        server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
-            }
+    @Test fun `failOnRed does not fail when a knownStableGroups match is not found in any walked repo`() {
+        server.dispatcher = notFoundDispatcher()
 
-        // See the comment in `failOnError causes build failure when Maven Central returns an
-        // error` above: server 404s every path, so repositories {} needs a separate, healthy
-        // mock server or Gradle's own dependency resolution drops the coordinate before the
-        // plugin ever sees it. serveMetadata=false keeps this repo out of the walk loop's own
-        // data for the same reason as that test.
         val repoDispatcher = mavenDispatcher("3.0.0", System.currentTimeMillis(), serveMetadata = false)
         MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
             repoServer.start()
@@ -635,17 +628,127 @@ class DependencyPulsePluginFunctionalTest {
                 """.trimIndent(),
             )
 
-            val result =
-                GradleRunner
-                    .create()
-                    .withProjectDir(projectDir)
-                    .withPluginClasspath()
-                    .withCompatGradleVersion()
-                    .withArguments(
-                        "dependencyPulse",
-                    ).buildAndFail()
+            val result = runner("dependencyPulse").build()
 
-            assertTrue(result.output.contains("🔴"))
+            assertTrue(result.output.contains("❓"), result.output)
+            assertTrue(result.output.contains("1 unknown, 0 stable"), result.output)
+            assertFalse(result.output.contains("🔴"), result.output)
+            assertFalse(result.output.contains("no longer published"), result.output)
+        }
+    }
+
+    @Test fun `failOnRed still fails when a knownStableGroups match is not found and the GitHub repo is archived`() {
+        server.dispatcher =
+            object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse =
+                    if (request.path?.startsWith("/repos/") == true) {
+                        githubDispatcher("2020-01-01T00:00:00Z", archived = true).dispatch(request)
+                    } else {
+                        MockResponse().setResponseCode(HTTP_404)
+                    }
+            }
+
+        val repoDispatcher =
+            mavenDispatcher(
+                "3.0.0",
+                System.currentTimeMillis(),
+                scmUrl = "https://github.com/example-owner/example-repo",
+                serveMetadata = false,
+            )
+        MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
+            repoServer.start()
+
+            settingsFile.writeText("rootProject.name = 'test-project'")
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                ${repoServer.repositoriesBlock()}
+                dependencies {
+                    compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
+                }
+                dependencyPulse {
+                    failOnRed = true
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+                }
+                """.trimIndent(),
+            )
+
+            val result = runner("dependencyPulse").buildAndFail()
+
+            assertTrue(result.output.contains("🔴"), result.output)
+        }
+    }
+
+    @Test fun `dependency declared only in settings repositories is UNKNOWN not RED`() {
+        withSettingsOnlyRepo(failOnRed = true) {
+            val result = runner("dependencyPulse").build()
+
+            assertTrue(result.output.contains("❓"), result.output)
+            assertTrue(result.output.contains("1 unknown"), result.output)
+            assertFalse(result.output.contains("🔴"), result.output)
+        }
+    }
+
+    @Test fun `notPublished dependency fails build only with failOnError`() {
+        withSettingsOnlyRepo(failOnError = true) {
+            val result = runner("dependencyPulse").buildAndFail()
+
+            assertTrue(result.output.contains("could not be checked: org.slf4j:slf4j-api:2.0.16"), result.output)
+            assertTrue(result.output.contains("❓"), result.output)
+        }
+    }
+
+    private fun notFoundDispatcher(): Dispatcher =
+        object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
+        }
+
+    private fun runner(vararg arguments: String): GradleRunner =
+        GradleRunner
+            .create()
+            .withProjectDir(projectDir)
+            .withPluginClasspath()
+            .withCompatGradleVersion()
+            .withArguments(*arguments)
+
+    private fun withSettingsOnlyRepo(
+        failOnRed: Boolean = false,
+        failOnError: Boolean = false,
+        block: () -> Unit,
+    ) {
+        server.dispatcher = notFoundDispatcher()
+        val repoDispatcher = mavenDispatcher("2.0.16", System.currentTimeMillis(), serveMetadata = false)
+        MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
+            repoServer.start()
+
+            settingsFile.writeText(
+                """
+                rootProject.name = 'test-project'
+                ${repoServer.settingsRepositoriesBlock()}
+                """.trimIndent(),
+            )
+            buildFile.writeText(
+                """
+                plugins {
+                    id 'java-library'
+                    id 'com.billgonemad.dependency-pulse'
+                }
+                dependencies {
+                    compileOnly 'org.slf4j:slf4j-api:2.0.16'
+                }
+                dependencyPulse {
+                    failOnRed = $failOnRed
+                    failOnError = $failOnError
+                    pomBaseUrl = "http://${server.hostName}:${server.port}"
+                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
+                }
+                """.trimIndent(),
+            )
+            block()
         }
     }
 

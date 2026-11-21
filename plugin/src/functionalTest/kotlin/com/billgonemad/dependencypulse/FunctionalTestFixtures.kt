@@ -118,13 +118,16 @@ internal fun mavenDispatcher(
         }
     }
 
-internal fun githubDispatcher(pushedAt: String): Dispatcher =
+internal fun githubDispatcher(
+    pushedAt: String,
+    archived: Boolean = false,
+): Dispatcher =
     object : Dispatcher() {
         override fun dispatch(request: RecordedRequest): MockResponse =
             if (request.path?.endsWith("/commits?per_page=1") == true) {
                 MockResponse().setBody("""[{"commit":{"committer":{"date":"$pushedAt"}}}]""")
             } else {
-                MockResponse().setBody("""{"archived":false,"pushed_at":"$pushedAt"}""")
+                MockResponse().setBody("""{"archived":$archived,"pushed_at":"$pushedAt"}""")
             }
     }
 
@@ -136,6 +139,18 @@ internal fun MockWebServer.repositoriesBlock(): String =
         maven {
             url = uri("http://$hostName:$port")
             allowInsecureProtocol = true
+        }
+    }
+    """.trimIndent()
+
+internal fun MockWebServer.settingsRepositoriesBlock(): String =
+    """
+    dependencyResolutionManagement {
+        repositories {
+            maven {
+                url = uri("http://$hostName:$port")
+                allowInsecureProtocol = true
+            }
         }
     }
     """.trimIndent()
