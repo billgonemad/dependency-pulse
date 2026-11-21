@@ -39,12 +39,14 @@ Dependency Pulse Report
    Latest: 3.14.0 | Released: 15 months ago
    GitHub: Last commit 14 months ago
 🔴 io.abandoned:legacy-lib:1.0.0
-   Artifact no longer published to Maven Central
+   Latest: 1.0.0 | Released: 40 months ago
    GitHub: Repo archived
 📘 jakarta.annotation:jakarta.annotation-api:3.0.0
    Spec (stable) | Latest: 3.0.0 | Released: 29 months ago
 ❓ com.flaky:unreachable-lib:2.0.0
    Maven Central unavailable — skipped (set failOnError=true to fail the build)
+❓ com.internal:settings-only-lib:1.2.0
+   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)
 ✅ com.example:widget:2.3.0
    Latest: 2.3.0 | Released: 2 months ago | Active
    GitHub: check skipped (rate limited)
@@ -52,7 +54,7 @@ Dependency Pulse Report
    Latest: 1.4.2 | Released: 4 months ago | Active
    GitHub: repository is empty (no commits)
 =======================
-7 dependencies scanned. 1 red, 1 yellow, 3 green, 1 unknown, 1 stable.
+8 dependencies scanned. 1 red, 1 yellow, 3 green, 2 unknown, 1 stable.
 1 GitHub check skipped (1 rate limited).
 1 GitHub repo is empty.
 ```
@@ -129,7 +131,7 @@ plugins {
 ```kotlin
 dependencyPulse {
     failOnRed = false          // fail the build if any RED dependency is found
-    failOnError = false        // fail the build if Maven Central is unreachable
+    failOnError = false        // fail the build if any dependency could not be checked (unreachable, or not found in any walked repository)
     runOnCheck = false         // attach dependencyPulse to the check lifecycle task
     summaryOnly = false        // print only the summary counts, no per-dependency lines
     showGreen = false          // also print GREEN (up-to-date) dependencies
@@ -270,28 +272,31 @@ For each resolved dependency — including BOM/platform components resolved via
 `implementation platform(...)`, since a stale BOM is valuable signal (it can
 pin old versions for everything under it), but excluding `project()` (local
 multi-module) dependencies, which aren't published Maven coordinates — the
-plugin queries Maven Central first for the artifact's version metadata and
-latest release date. If that result isn't
-healthy (not Green), it walks any other Maven repository your build's
-`repositories {}` block declares, in the order they're declared, stopping at
+plugin queries Maven Central (`pomBaseUrl`) first for the artifact's version
+metadata and latest release date. If that
+result isn't healthy (not Green), it walks every Maven-type repository with an
+http(s) URL declared in the project's own `repositories {}` (`mavenCentral()`,
+`google()`, `maven { url = ... }`), in the order they're declared, stopping at
 the first healthy (Green) result or otherwise falling back to the freshest
 real release date found across every repository checked. This matters for
 artifacts like `org.gradle:gradle-tooling-api`, whose real release history
 lives on `repo.gradle.org` — Central alone only has one ancient entry for it,
-which would otherwise look abandoned. `mavenLocal()` isn't walked — the
-plugin can't query a filesystem repository over HTTP. Repositories that
+which would otherwise look abandoned. Not walked: settings-level
+`dependencyResolutionManagement` repositories, Ivy, `flatDir`, `mavenLocal()`
+(the plugin can't query a filesystem repository over HTTP). Repositories that
 require credentials *are* walked like any other, but the plugin doesn't send
 any credentials (authenticated-repository support isn't implemented yet,
 tracked as a follow-up), so a private repository will typically fail with an
-authentication error rather than being silently skipped. It then classifies
+authentication error rather than being silently skipped. A dependency found
+in none of the walked repositories is reported Unknown, not Red. The plugin then classifies
 the dependency:
 
 | Status | Condition |
 |--------|-----------|
 | ✅ Green | Last release < 12 months ago |
 | ⚠️ Yellow | Last release 12–24 months ago |
-| 🔴 Red | Last release > 24 months ago, or artifact not found in any declared repository |
-| ❓ Unknown | A declared repository couldn't be reached, and no repository ever returned data for the artifact |
+| 🔴 Red | Last release > 24 months ago, GitHub last commit past the red threshold, or GitHub repo archived |
+| ❓ Unknown | A declared repository couldn't be reached and no repository returned data, or the artifact was not found in any walked repository. A stale or archived GitHub repo can still raise it to Yellow or Red. |
 | 📘 Spec (stable) | Matches `knownStableGroups` and real Maven data exists — shown instead of the status above, regardless of age |
 
 Thresholds are configurable. Test configurations are excluded by default.
@@ -375,9 +380,9 @@ date:
 
 Matched dependencies are excluded from `failOnRed` and counted separately in
 the summary. This only applies when the plugin has real Maven data for the
-dependency — if the artifact can't be reached or has been removed from
-Maven Central, it's still reported and gated normally; there's no "stable"
-label to hide behind for a genuine error.
+dependency — if the artifact can't be reached or is not found in any walked
+repository, it's reported Unknown (gated by `failOnError`, not `failOnRed`)
+and gets no stable label.
 
 This exemption is based on whether the plugin has real Maven release data —
 not on which signal is driving the status. The one exception: an **archived

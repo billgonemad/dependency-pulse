@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DependencyAnalyzerTest {
@@ -102,13 +103,53 @@ class DependencyAnalyzerTest {
         githubClient: GitHubClient = stubGithubClient(),
     ): DependencyAnalyzer = DependencyAnalyzer(stubClient(signals), pomClient, githubClient)
 
-    @Test fun `returns RED when artifact not found on Central`() {
+    @Test fun `returns UNKNOWN when artifact not found on Central`() {
         val analyzer = analyzerWith(null)
 
         val results =
             analyzer.analyze(setOf(Coords("com.example", "gone", "1.0")), singleRepoUrls, 12, 24, emptyList())
 
+        assertNotPublishedUnknown(results[0])
+    }
+
+    @Test fun `NotPublished with archived GitHub repo is still RED`() {
+        val analyzer =
+            analyzerWith(
+                null,
+                pomClient = stubPomClient("org/gone"),
+                githubClient = stubGithubClient(GitHubSignals.Archived),
+            )
+
+        val results =
+            analyzer.analyze(setOf(Coords("com.example", "gone", "1.0")), singleRepoUrls, 12, 24, emptyList())
+
         assertEquals(DepStatus.RED, results[0].status)
+        assertTrue(results[0].notPublished)
+        assertNull(results[0].mavenSignals)
+    }
+
+    @Test fun `knownStable NotPublished dependency is UNKNOWN`() {
+        val analyzer = analyzerWith(null)
+
+        val results =
+            analyzer.analyze(
+                setOf(Coords("jakarta.annotation", "jakarta.annotation-api", "3.0.0")),
+                singleRepoUrls,
+                12,
+                24,
+                listOf("jakarta."),
+            )
+
+        assertEquals(DepStatus.UNKNOWN, results[0].status)
+        assertTrue(results[0].knownStable)
+        assertNull(results[0].mavenSignals)
+    }
+
+    private fun assertNotPublishedUnknown(info: DependencyInfo) {
+        assertEquals(DepStatus.UNKNOWN, info.status)
+        assertTrue(info.notPublished)
+        assertNull(info.mavenSignals)
+        assertNull(info.errorMessage)
     }
 
     @Test fun `returns UNKNOWN and sets errorMessage when client throws`() {
@@ -606,7 +647,7 @@ class DependencyAnalyzerTest {
         assertEquals(newerUnverified, results[0].mavenSignals)
     }
 
-    @Test fun `returns RED when every declared repo returns a clean 404`() {
+    @Test fun `returns UNKNOWN when every declared repo returns a clean 404`() {
         val analyzer = DependencyAnalyzer(stubClient(null), stubPomClient(), stubGithubClient())
 
         val results =
@@ -618,7 +659,7 @@ class DependencyAnalyzerTest {
                 emptyList(),
             )
 
-        assertEquals(DepStatus.RED, results[0].status)
+        assertNotPublishedUnknown(results[0])
     }
 
     @Test fun `falls back to the freshest real result when no repo is GREEN`() {
@@ -673,6 +714,15 @@ class DependencyAnalyzerTest {
 
         assertEquals(DepStatus.UNKNOWN, results[0].status)
         assertNotNull(results[0].errorMessage)
+    }
+
+    @Test fun `Unresolvable result leaves notPublished false`() {
+        val analyzer = DependencyAnalyzer(throwingClient(), stubPomClient(), stubGithubClient())
+
+        val results =
+            analyzer.analyze(setOf(Coords("org.example", "bad", "1.0")), singleRepoUrls, 12, 24, emptyList())
+
+        assertFalse(results[0].notPublished)
     }
 
     @Test fun `keeps the fresher earlier result when a later declared repo returns a staler one`() {

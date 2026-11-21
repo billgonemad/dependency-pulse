@@ -420,6 +420,7 @@ class DependencyPulsePluginFunctionalTest {
                     ).buildAndFail()
 
             assertTrue(result.output.contains("❓"))
+            assertTrue(result.output.contains("Maven Central unavailable"), result.output)
         }
     }
 
@@ -599,54 +600,6 @@ class DependencyPulsePluginFunctionalTest {
         assertEquals(TaskOutcome.SUCCESS, result.task(":dependencyPulse")?.outcome)
         assertTrue(result.output.contains("📘"))
         assertTrue(result.output.contains("Spec (stable)"))
-    }
-
-    @Test fun `failOnRed still fails when a knownStableGroups match has no Maven data`() {
-        server.dispatcher =
-            object : Dispatcher() {
-                override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setResponseCode(HTTP_404)
-            }
-
-        // See the comment in `failOnError causes build failure when Maven Central returns an
-        // error` above: server 404s every path, so repositories {} needs a separate, healthy
-        // mock server or Gradle's own dependency resolution drops the coordinate before the
-        // plugin ever sees it. serveMetadata=false keeps this repo out of the walk loop's own
-        // data for the same reason as that test.
-        val repoDispatcher = mavenDispatcher("3.0.0", System.currentTimeMillis(), serveMetadata = false)
-        MockWebServer().apply { dispatcher = repoDispatcher }.use { repoServer ->
-            repoServer.start()
-
-            settingsFile.writeText("rootProject.name = 'test-project'")
-            buildFile.writeText(
-                """
-                plugins {
-                    id 'java-library'
-                    id 'com.billgonemad.dependency-pulse'
-                }
-                ${repoServer.repositoriesBlock()}
-                dependencies {
-                    compileOnly 'jakarta.annotation:jakarta.annotation-api:3.0.0'
-                }
-                dependencyPulse {
-                    failOnRed = true
-                    pomBaseUrl = "http://${server.hostName}:${server.port}"
-                    githubApiBaseUrl = "http://${server.hostName}:${server.port}"
-                }
-                """.trimIndent(),
-            )
-
-            val result =
-                GradleRunner
-                    .create()
-                    .withProjectDir(projectDir)
-                    .withPluginClasspath()
-                    .withCompatGradleVersion()
-                    .withArguments(
-                        "dependencyPulse",
-                    ).buildAndFail()
-
-            assertTrue(result.output.contains("🔴"))
-        }
     }
 
     @Test fun `dependencyPulse runs under --configuration-cache and reuses the cache on a second run`() {

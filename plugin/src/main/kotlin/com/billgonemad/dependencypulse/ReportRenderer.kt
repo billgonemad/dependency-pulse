@@ -5,6 +5,9 @@ import java.time.temporal.ChronoUnit
 
 private const val DAYS_PER_MONTH = 30
 
+private const val NOT_FOUND_DETAIL =
+    "   Not found in any repository dependencyPulse checked — Maven age unknown (see README: How it works)"
+
 object ReportRenderer {
     // Defaults to VERBOSE (every dependency) so unit tests that exercise line formatting
     // don't need to opt in to green lines. The one production caller
@@ -87,12 +90,12 @@ object ReportRenderer {
         isStable: Boolean,
     ) {
         when {
-            dep.status == DepStatus.UNKNOWN -> {
-                appendLine("   Maven Central unavailable — skipped (set failOnError=true to fail the build)")
+            dep.notPublished -> {
+                appendLine(NOT_FOUND_DETAIL)
             }
 
-            dep.status == DepStatus.RED && dep.mavenSignals == null -> {
-                appendLine("   Artifact no longer published to Maven Central")
+            dep.status == DepStatus.UNKNOWN -> {
+                appendLine("   Maven Central unavailable — skipped (set failOnError=true to fail the build)")
             }
 
             else -> {

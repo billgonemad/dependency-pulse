@@ -43,6 +43,7 @@ data class DependencyInfo(
     val errorMessage: String?,
     val javaxBlocker: Boolean = false,
     val knownStable: Boolean = false,
+    val notPublished: Boolean = false,
 )
 
 internal fun DependencyInfo.isKnownStableWithSignals(): Boolean =
@@ -61,7 +62,7 @@ internal fun List<DependencyInfo>.coordinateSummary(): String {
 private const val DAYS_PER_MONTH = 30
 
 fun score(
-    mavenSignals: MavenSignals?,
+    mavenSignals: MavenSignals,
     githubSignals: GitHubSignals,
     yellowMonths: Int,
     redMonths: Int,
@@ -91,15 +92,12 @@ private fun severityOf(status: DepStatus): Int =
     }
 
 internal fun mavenStatus(
-    signals: MavenSignals?,
+    signals: MavenSignals,
     yellowMonths: Int,
     redMonths: Int,
-): DepStatus {
-    if (signals == null) return DepStatus.RED
-    return monthsStatus(signals.latestReleaseDate, yellowMonths, redMonths)
-}
+): DepStatus = monthsStatus(signals.latestReleaseDate, yellowMonths, redMonths)
 
-// For the "Maven walk couldn't resolve anything" case: UNKNOWN sits between GREEN and YELLOW in
+// For the "Maven walk has no signals" cases (Unresolvable, NotPublished): UNKNOWN sits between GREEN and YELLOW in
 // severity, so combining it with githubStatus lets a real GitHub RED/YELLOW signal still surface,
 // while a GREEN/no-repo GitHub signal correctly leaves the overall verdict at UNKNOWN rather than
 // falsely implying confidence the Maven side never had.

@@ -8,10 +8,6 @@ import kotlin.test.assertEquals
 class ScoringTest {
     private val now: Instant = Instant.now()
 
-    @Test fun `null signals returns RED`() {
-        assertEquals(DepStatus.RED, score(null, GitHubSignals.NoRepo, 12, 24))
-    }
-
     @Test fun `0 days old returns GREEN`() {
         val signals = MavenSignals("1.0", now)
         assertEquals(DepStatus.GREEN, score(signals, GitHubSignals.NoRepo, 12, 24))
@@ -54,8 +50,12 @@ class ScoringTest {
     }
 
     @Test fun `archived GitHub repo forces RED even with no Maven signals`() {
-        val github = GitHubSignals.Archived
-        assertEquals(DepStatus.RED, score(null, github, 12, 24))
+        assertEquals(DepStatus.RED, unresolvableStatus(GitHubSignals.Archived, 12, 24))
+    }
+
+    @Test fun `stale GitHub repo makes an unresolvable Maven lookup YELLOW`() {
+        val github = GitHubSignals.Found(now.minus(450, ChronoUnit.DAYS))
+        assertEquals(DepStatus.YELLOW, unresolvableStatus(github, 12, 24))
     }
 
     @Test fun `stale GitHub commits downgrade a fresh Maven release to YELLOW`() {
@@ -101,8 +101,8 @@ class ScoringTest {
     }
 
     @Test fun `worst-of wins - a fresh GitHub commit does not improve a RED Maven status`() {
-        val github = GitHubSignals.Found(now)
-        assertEquals(DepStatus.RED, score(null, github, 12, 24))
+        val signals = MavenSignals("1.0", now.minus(750, ChronoUnit.DAYS))
+        assertEquals(DepStatus.RED, score(signals, GitHubSignals.Found(now), 12, 24))
     }
 
     @Test fun `combineStatuses ranks RED above UNKNOWN regardless of argument order`() {
